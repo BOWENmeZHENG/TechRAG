@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "techrag"
+version = "0.1.0"
+description = "Retrieval-augmented generation over technical documentation."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Bowen Zheng", email = "bowenzheng01@gmail.com" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+py-modules = ["ingest"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
