@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=69"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.8"]
+build-backend = "uv_build"
 
 [project]
 name = "techrag"
@@ -9,18 +9,22 @@ description = "Retrieval-augmented generation over technical documentation."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "Bowen Zheng", email = "bowenzheng01@gmail.com" }]
-dependencies = []
+dependencies = [
+    "langchain-text-splitters>=1.1.2",
+]
 
-[project.optional-dependencies]
+[project.scripts]
+techrag-ingest = "techrag.ingest:main"
+
+[dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
-
-[tool.setuptools]
-package-dir = { "" = "src" }
-py-modules = ["ingest"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]  # pycodestyle, pyflakes, isort, bugbear, pyupgrade
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
