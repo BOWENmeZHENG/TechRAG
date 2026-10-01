@@ -33,3 +33,7 @@ def test_file_path_instead_of_directory_raises_file_not_found(tmp_path: Path) ->
 
 def test_empty_directory_returns_empty_list(tmp_path: Path) -> None:
     assert load_documents(tmp_path) == []
+
+
+def test_chunk_short_text_returns_single_chunk() -> None:
+    assert chunk("hello world", size=100, overlap=10) == ["hello world"]
