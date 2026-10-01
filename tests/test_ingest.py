@@ -21,3 +21,11 @@ def test_missing_directory_raises_file_not_found(tmp_path: Path) -> None:
 
     with pytest.raises(FileNotFoundError, match="not found"):
         load_documents(missing)
+
+
+def test_file_path_instead_of_directory_raises_file_not_found(tmp_path: Path) -> None:
+    file_path = tmp_path / "notes.md"
+    file_path.write_text("not a directory", encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError, match="not found"):
+        load_documents(file_path)
