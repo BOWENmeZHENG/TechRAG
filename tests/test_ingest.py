@@ -38,5 +38,15 @@ def test_empty_directory_returns_empty_list(tmp_path: Path) -> None:
 def test_chunk_short_text_returns_single_chunk() -> None:
     assert chunk("hello world", size=100, overlap=10) == ["hello world"]
 
+
 def test_chunk_empty_text_returns_no_chunks() -> None:
     assert chunk("") == []
+
+
+def test_chunk_does_not_exceed_size() -> None:
+    text = "\n\n".join(f"Paragraph {i}. " + "word " * 30 for i in range(10))
+
+    chunks = chunk(text, size=200, overlap=20)
+
+    assert len(chunks) > 1
+    assert all(len(c) <= 200 for c in chunks)
