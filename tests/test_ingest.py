@@ -50,3 +50,13 @@ def test_chunk_does_not_exceed_size() -> None:
 
     assert len(chunks) > 1
     assert all(len(c) <= 200 for c in chunks)
+
+
+def test_chunk_overlaps_adjacent_chunks() -> None:
+    text = " ".join(f"w{i}" for i in range(200))
+
+    chunks = chunk(text, size=100, overlap=30)
+
+    assert len(chunks) > 1
+    for prev, nxt in zip(chunks, chunks[1:]):
+        assert prev.split()[-1] in nxt.split()
