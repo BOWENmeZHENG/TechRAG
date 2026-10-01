@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from langchain_text_splitters import Language, RecursiveCharacterTextSplitter
 
 @dataclass(frozen=True)
 class Document:
@@ -27,8 +28,20 @@ def load_documents(path: Path) -> list[Document]:
 
 
 def chunk(text: str, size: int = 500, overlap: int = 50) -> list[str]:
-    """Split ``text`` into chunks of ``size`` characters overlapping by ``overlap``."""
-    raise NotImplementedError
+    """Split Markdown ``text`` into chunks of at most ``size`` characters.
+
+    Splits prefer heading, code-fence and paragraph boundaries, falling back to finer
+    separators only when a section is too large. Adjacent chunks may share up to
+    ``overlap`` characters of context.
+
+    Raises:
+        ValueError: If ``size`` is not positive, or ``overlap`` is negative or not
+            smaller than ``size``.
+    """
+    splitter = RecursiveCharacterTextSplitter.from_language(
+        Language.MARKDOWN, chunk_size=size, chunk_overlap=overlap
+    )
+    return splitter.split_text(text)
 
 
 def embed_and_store(chunks: list[str]) -> None:
