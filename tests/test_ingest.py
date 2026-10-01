@@ -14,3 +14,10 @@ def test_loads_markdown_recursively_in_sorted_order(tmp_path: Path) -> None:
         Document(source=Path("a.md"), text="one"),
         Document(source=Path("b/two.md"), text="two"),
     ]
+
+
+def test_missing_directory_raises_file_not_found(tmp_path: Path) -> None:
+    missing = tmp_path / "does_not_exist"
+
+    with pytest.raises(FileNotFoundError, match="not found"):
+        load_documents(missing)
