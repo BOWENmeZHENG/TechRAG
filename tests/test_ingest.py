@@ -29,3 +29,7 @@ def test_file_path_instead_of_directory_raises_file_not_found(tmp_path: Path) ->
 
     with pytest.raises(FileNotFoundError, match="not found"):
         load_documents(file_path)
+
+
+def test_empty_directory_returns_empty_list(tmp_path: Path) -> None:
+    assert load_documents(tmp_path) == []
