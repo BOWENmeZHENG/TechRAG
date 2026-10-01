@@ -1,11 +1,29 @@
 """Ingest technical documentation into the TechRAG index."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 
-def load_documents(path: Path) -> list[str]:
-    """Load the raw text of each document under ``path``."""
-    raise NotImplementedError
+@dataclass(frozen=True)
+class Document:
+    """A source document: its path relative to the data dir and its raw text."""
+
+    source: Path
+    text: str
+
+
+def load_documents(path: Path) -> list[Document]:
+    """Load every Markdown file under ``path``, in sorted order.
+
+    Raises:
+        FileNotFoundError: If ``path`` is not an existing directory.
+    """
+    if not path.is_dir():
+        raise FileNotFoundError(f"Data directory not found: {path}")
+    return [
+        Document(source=f.relative_to(path), text=f.read_text(encoding="utf-8"))
+        for f in sorted(path.rglob("*.md"))
+    ]
 
 
 def chunk(text: str, size: int = 500, overlap: int = 50) -> list[str]:
