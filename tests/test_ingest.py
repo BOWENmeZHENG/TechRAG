@@ -60,3 +60,11 @@ def test_chunk_overlaps_adjacent_chunks() -> None:
     assert len(chunks) > 1
     for prev, nxt in zip(chunks, chunks[1:]):
         assert prev.split()[-1] in nxt.split()
+
+
+def test_chunk_preserves_all_content() -> None:
+    words = [f"w{i}" for i in range(200)]
+
+    chunks = chunk(" ".join(words), size=100, overlap=30)
+
+    assert set(words) <= {w for c in chunks for w in c.split()}
