@@ -37,3 +37,6 @@ def test_empty_directory_returns_empty_list(tmp_path: Path) -> None:
 
 def test_chunk_short_text_returns_single_chunk() -> None:
     assert chunk("hello world", size=100, overlap=10) == ["hello world"]
+
+def test_chunk_empty_text_returns_no_chunks() -> None:
+    assert chunk("") == []
