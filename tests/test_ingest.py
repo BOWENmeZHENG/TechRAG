@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from techrag import ingest
-from techrag.ingest import Document, _embed, chunk, embed_and_store, load_documents
+from techrag.ingest import Chunk, Document, _embed, chunk, embed_and_store, load_documents
 
 
 def test_loads_markdown_recursively_in_sorted_order(tmp_path: Path) -> None:
@@ -103,19 +103,31 @@ def test_embed_loads_requested_model_and_asks_for_numpy_normalized(fake_model) -
     assert model.encode_kwargs == {"normalize_embeddings": True, "convert_to_numpy": True}
 
 
+def _chunks(*texts: str) -> list[Chunk]:
+    return [Chunk(Path(f"doc{i}.md"), t) for i, t in enumerate(texts)]
+
+
 def test_embed_and_store_writes_index_and_chunks(tmp_path: Path, fake_model) -> None:
-    chunks = ["alpha", "beta", "gamma"]
+    chunks = [
+        Chunk(Path("a.md"), "alpha"),
+        Chunk(Path("sub/b.md"), "beta"),
+        Chunk(Path("sub/b.md"), "gamma"),
+    ]
 
     embed_and_store(chunks, index_dir=tmp_path)
 
     index = faiss.read_index(str(tmp_path / "index.faiss"))
     assert index.ntotal == len(chunks)
     assert index.d == fake_model.dim
-    assert json.loads((tmp_path / "chunks.json").read_text(encoding="utf-8")) == chunks
+    assert json.loads((tmp_path / "chunks.json").read_text(encoding="utf-8")) == [
+        {"source": "a.md", "text": "alpha"},
+        {"source": "sub/b.md", "text": "beta"},
+        {"source": "sub/b.md", "text": "gamma"},
+    ]
 
 
 def test_embed_and_store_index_row_i_matches_chunk_i(tmp_path: Path, fake_model) -> None:
-    chunks = ["alpha", "beta", "gamma"]
+    chunks = _chunks("alpha", "beta", "gamma")
     embed_and_store(chunks, index_dir=tmp_path)
     index = faiss.read_index(str(tmp_path / "index.faiss"))
 
@@ -130,26 +142,28 @@ def test_embed_and_store_index_row_i_matches_chunk_i(tmp_path: Path, fake_model)
 def test_embed_and_store_creates_missing_nested_index_dir(tmp_path: Path, fake_model) -> None:
     index_dir = tmp_path / "nested" / ".index"
 
-    embed_and_store(["alpha"], index_dir=index_dir)
+    embed_and_store(_chunks("alpha"), index_dir=index_dir)
 
     assert (index_dir / "index.faiss").is_file()
     assert (index_dir / "chunks.json").is_file()
 
 
 def test_embed_and_store_passes_model_name_through(tmp_path: Path, fake_model) -> None:
-    embed_and_store(["alpha"], index_dir=tmp_path, model_name="custom-model")
+    embed_and_store(_chunks("alpha"), index_dir=tmp_path, model_name="custom-model")
 
     assert [m.model_name for m in fake_model.instances] == ["custom-model"]
 
 
 def test_embed_and_store_replaces_existing_index(tmp_path: Path, fake_model) -> None:
-    embed_and_store(["old1", "old2", "old3"], index_dir=tmp_path)
+    embed_and_store(_chunks("old1", "old2", "old3"), index_dir=tmp_path)
 
-    embed_and_store(["new"], index_dir=tmp_path)
+    embed_and_store(_chunks("new"), index_dir=tmp_path)
 
     index = faiss.read_index(str(tmp_path / "index.faiss"))
     assert index.ntotal == 1
-    assert json.loads((tmp_path / "chunks.json").read_text(encoding="utf-8")) == ["new"]
+    assert json.loads((tmp_path / "chunks.json").read_text(encoding="utf-8")) == [
+        {"source": "doc0.md", "text": "new"}
+    ]
 
 
 def test_embed_and_store_empty_chunks_raises_and_writes_nothing(
