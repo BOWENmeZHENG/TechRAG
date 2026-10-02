@@ -1,6 +1,8 @@
 """Ingest technical documentation into the TechRAG index."""
 
+import argparse
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -84,7 +86,21 @@ def embed_and_store(
 
 def main() -> None:
     """Entry point for the ``techrag-ingest`` command."""
-    raise NotImplementedError
+    parser = argparse.ArgumentParser(description="Build the TechRAG index from Markdown docs.")
+    parser.add_argument("data_dir", nargs="?", type=Path, default=Path("data"))
+    parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
+    parser.add_argument("--size", type=int, default=500, help="max characters per chunk")
+    parser.add_argument("--overlap", type=int, default=50, help="characters shared by chunks")
+    parser.add_argument("--model", default=EMBEDDING_MODEL, help="sentence-transformers model")
+    args = parser.parse_args()
+
+    try:
+        documents = load_documents(args.data_dir)
+        chunks = [c for d in documents for c in chunk(d.text, args.size, args.overlap)]
+        embed_and_store(chunks, args.index_dir, args.model)
+    except (FileNotFoundError, ValueError) as e:
+        sys.exit(f"error: {e}")
+    print(f"Indexed {len(chunks)} chunks from {len(documents)} documents into {args.index_dir}")
 
 
 if __name__ == "__main__":
