@@ -17,6 +17,7 @@ dependencies = [
 
 [project.scripts]
 techrag-ingest = "techrag.ingest:main"
+techrag-retrieve = "techrag.retrieve:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
