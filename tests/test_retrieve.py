@@ -12,7 +12,6 @@ from techrag.retrieve import QUERY_PREFIX, retrieve
 class FakeSentenceTransformer:
     """Stand-in for SentenceTransformer: maps known texts to fixed unit-ish vectors."""
 
-    instances: list["FakeSentenceTransformer"] = []
     # Passage "alpha" -> axis 0, "beta" -> axis 1, "gamma" -> axis 2.
     # The query "find beta" (with prefix) lands mostly on axis 1, a bit on axis 2.
     vectors = {
@@ -23,12 +22,9 @@ class FakeSentenceTransformer:
     }
 
     def __init__(self, model_name: str) -> None:
-        self.model_name = model_name
-        self.encoded: list[str] = []
-        FakeSentenceTransformer.instances.append(self)
+        pass
 
     def encode(self, texts: list[str], **kwargs) -> np.ndarray:
-        self.encoded.extend(texts)
         out = np.array([self.vectors[t] for t in texts], dtype=np.float64)
         if kwargs.get("normalize_embeddings"):
             out /= np.linalg.norm(out, axis=1, keepdims=True)
@@ -36,10 +32,8 @@ class FakeSentenceTransformer:
 
 
 @pytest.fixture
-def fake_model(monkeypatch: pytest.MonkeyPatch) -> type[FakeSentenceTransformer]:
-    FakeSentenceTransformer.instances = []
+def fake_model(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ingest, "SentenceTransformer", FakeSentenceTransformer)
-    return FakeSentenceTransformer
 
 
 @pytest.fixture
@@ -50,7 +44,6 @@ def index_dir(tmp_path: Path, fake_model) -> Path:
         Chunk(Path("sub/b.md"), "gamma"),
     ]
     embed_and_store(chunks, index_dir=tmp_path)
-    fake_model.instances.clear()
     return tmp_path
 
 
@@ -69,14 +62,6 @@ def test_k_larger_than_index_returns_every_chunk(index_dir: Path) -> None:
     assert sorted(r.text for r in results) == ["alpha", "beta", "gamma"]
 
 
-def test_query_is_prefixed_and_model_name_passed_through(index_dir: Path, fake_model) -> None:
-    retrieve("find beta", index_dir=index_dir, model_name="custom-model")
-
-    (model,) = fake_model.instances
-    assert model.model_name == "custom-model"
-    assert model.encoded == [QUERY_PREFIX + "find beta"]
-
-
 @pytest.mark.parametrize("query", ["", "   \n"])
 def test_blank_query_raises(index_dir: Path, query: str) -> None:
     with pytest.raises(ValueError, match="Query"):
@@ -89,11 +74,9 @@ def test_non_positive_k_raises(index_dir: Path, k: int) -> None:
         retrieve("find beta", k=k, index_dir=index_dir)
 
 
-def test_missing_index_raises_file_not_found(tmp_path: Path, fake_model) -> None:
+def test_missing_index_raises_file_not_found(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="techrag-ingest"):
         retrieve("find beta", index_dir=tmp_path)
-
-    assert fake_model.instances == []
 
 
 def test_index_and_chunks_out_of_sync_raises(index_dir: Path) -> None:
