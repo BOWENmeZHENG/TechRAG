@@ -79,7 +79,7 @@ def main() -> None:
     except (FileNotFoundError, ValueError) as e:
         sys.exit(f"error: {e}")
     for rank, r in enumerate(results, start=1):
-        print(f"[{rank}] {r.source.as_posix()}  (score {r.score:.3f})\n{r.text}\n")
+        print(f"[{rank}] {r.source}  (score {r.score:.3f})\n{r.text}\n")
 
 
 if __name__ == "__main__":
