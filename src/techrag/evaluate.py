@@ -1,15 +1,11 @@
 """Evaluate TechRAG retrieval against the labelled questions in ``eval/questions.jsonl``."""
 
-import argparse
 import json
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from techrag.ingest import EMBEDDING_MODEL, INDEX_DIR
-from techrag.metrics import hit_at_k, mean_reciprocal_rank
-from techrag.retrieve import Result, retrieve
+from techrag.retrieve import Result
 
 QUESTIONS_PATH = Path("eval/questions.jsonl")
 
@@ -54,3 +50,21 @@ def load_questions(path: Path = QUESTIONS_PATH) -> list[Question]:
             Question(record["query"], Path(record["source"]), record["evidence"])
         )
     return questions
+
+
+def _normalize(text: str) -> str:
+    """Lowercase ``text`` and collapse whitespace, so line wrapping does not affect matching."""
+    return " ".join(text.lower().split())
+
+
+def first_relevant_rank(question: Question, results: Sequence[Result]) -> int | None:
+    """Return the 1-based rank of the first result that answers ``question``, or ``None``.
+
+    A result answers the question if it comes from the question's source and contains its
+    evidence, ignoring case and differences in whitespace.
+    """
+    evidence = _normalize(question.evidence)
+    for rank, r in enumerate(results, start=1):
+        if r.source == question.source and evidence in _normalize(r.text):
+            return rank
+    return None

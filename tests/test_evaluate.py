@@ -2,7 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from techrag.evaluate import Question, load_questions
+from techrag.evaluate import Question, first_relevant_rank, load_questions
+from techrag.retrieve import Result
+
+QUESTION = Question("q", Path("a.md"), "chain rule")
 
 
 def test_load_questions_skips_blank_lines_and_extra_fields(tmp_path: Path):
@@ -29,3 +32,22 @@ def test_load_questions_rejects_bad_line_with_line_number(tmp_path: Path, line: 
     f.write_text(f'{{"query": "q", "source": "a.md", "evidence": "e"}}\n{line}\n', encoding="utf-8")
     with pytest.raises(ValueError, match=":2:"):
         load_questions(f)
+
+
+def _result(source: str, text: str) -> Result:
+    # 1.0 is dummy score, won't be used by first_relevant_rank
+    return Result(source=Path(source), text=text, score=1.0) 
+
+
+def test_first_relevant_rank_needs_right_source_and_evidence():
+    results = [
+        _result("b.md", "chain rule"),  # right text, wrong source
+        _result("a.md", "something else"),  # right source, no evidence
+        _result("a.md", "the chain rule"),
+    ]
+    assert first_relevant_rank(QUESTION, results) == 3
+    assert first_relevant_rank(QUESTION, results[:2]) is None
+
+
+def test_first_relevant_rank_ignores_case_and_whitespace():
+    assert first_relevant_rank(QUESTION, [_result("a.md", "The Chain\n  RULE applies")]) == 1
