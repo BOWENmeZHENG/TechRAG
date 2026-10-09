@@ -221,3 +221,5 @@ __marimo__/
 .DS_Store
 # TechRAG generated index
 .index/
+# eval results
+results.json
