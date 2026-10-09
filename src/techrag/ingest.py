@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 import faiss
@@ -62,9 +63,15 @@ def chunk(text: str, size: int = 500, overlap: int = 50) -> list[str]:
     return splitter.split_text(text)
 
 
+@cache
+def _load_model(model_name: str) -> SentenceTransformer:
+    """Load the embedding model once per process, so repeated queries do not reload it."""
+    return SentenceTransformer(model_name)
+
+
 def _embed(chunks: list[str], model_name: str) -> np.ndarray:
     """Return L2-normalized float32 embeddings for ``chunks``, one row per chunk."""
-    model = SentenceTransformer(model_name)
+    model = _load_model(model_name)
     return model.encode(chunks, normalize_embeddings=True, convert_to_numpy=True).astype(
         np.float32
     )

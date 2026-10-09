@@ -1,4 +1,5 @@
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
@@ -32,8 +33,11 @@ class FakeSentenceTransformer:
 
 
 @pytest.fixture
-def fake_model(monkeypatch: pytest.MonkeyPatch) -> None:
+def fake_model(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(ingest, "SentenceTransformer", FakeSentenceTransformer)
+    ingest._load_model.cache_clear()  # don't reuse a model cached by another test
+    yield
+    ingest._load_model.cache_clear()  # don't leak the fake into other tests
 
 
 @pytest.fixture
