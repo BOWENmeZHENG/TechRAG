@@ -1,10 +1,15 @@
 """Evaluate TechRAG retrieval against the labelled questions in ``eval/questions.jsonl``."""
 
+import argparse
 import json
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
+from techrag.ingest import EMBEDDING_MODEL, INDEX_DIR
+from techrag.metrics import hit_at_k, mean_reciprocal_rank
 from techrag.retrieve import Result, retrieve
 
 QUESTIONS_PATH = Path("eval/questions.jsonl")
@@ -86,3 +91,32 @@ def evaluate(
         FileNotFoundError: If the default retriever finds no index.
     """
     return [first_relevant_rank(q, retriever(q.query, k)) for q in questions]
+
+
+def main() -> None:
+    """Entry point for the ``techrag-eval`` command."""
+    parser = argparse.ArgumentParser(description="Evaluate TechRAG retrieval.")
+    parser.add_argument("-k", type=int, default=5, help="number of chunks to retrieve per query")
+    parser.add_argument("--questions", type=Path, default=QUESTIONS_PATH)
+    parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
+    parser.add_argument("--model", default=EMBEDDING_MODEL, help="must match the ingest model")
+    args = parser.parse_args()
+
+    try:
+        questions = load_questions(args.questions)
+        retriever = partial(retrieve, index_dir=args.index_dir, model_name=args.model)
+        ranks = evaluate(questions, args.k, retriever)
+        hit = hit_at_k(ranks, args.k)
+        mrr = mean_reciprocal_rank(ranks)
+    except (FileNotFoundError, ValueError) as e:
+        sys.exit(f"error: {e}")
+
+    for q, rank in zip(questions, ranks, strict=True):
+        print(f"{'miss' if rank is None else f'rank {rank}':>7}  {q.query}")
+    print(f"\n{len(questions)} questions")
+    print(f"hit@{args.k}: {hit:.3f}")
+    print(f"MRR:    {mrr:.3f}")
+
+
+if __name__ == "__main__":
+    main()

@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from techrag.evaluate import Question, evaluate, first_relevant_rank, load_questions
+from techrag import evaluate as evaluate_module
+from techrag.evaluate import Question, evaluate, first_relevant_rank, load_questions, main
 from techrag.retrieve import Result
 
 QUESTION = Question("q", Path("a.md"), "chain rule")
@@ -67,3 +68,28 @@ def test_evaluate_ranks_each_question_in_order_using_k():
     questions = [Question(q, Path("a.md"), "chain rule") for q in ("hit", "miss")]
     assert evaluate(questions, k=3, retriever=retriever) == [1, None]
     assert calls == [("hit", 3), ("miss", 3)]
+
+
+def _write_questions(path: Path) -> Path:
+    path.write_text(
+        '{"query": "hit", "source": "a.md", "evidence": "chain rule"}\n'
+        '{"query": "miss", "source": "a.md", "evidence": "nope"}\n',
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_main_prints_per_question_ranks_and_metrics(tmp_path: Path, monkeypatch, capsys):
+    def fake_retrieve(query: str, k: int, index_dir: Path, model_name: str) -> list[Result]:
+        return [_result("a.md", "chain rule")]
+
+    monkeypatch.setattr(evaluate_module, "retrieve", fake_retrieve)
+    monkeypatch.setattr(
+        "sys.argv", ["techrag-eval", "-k", "3", "--questions", str(_write_questions(tmp_path / "q"))]
+    )
+    main()
+    out = capsys.readouterr().out
+    assert "rank 1  hit" in out
+    assert "miss  miss" in out
+    assert "hit@3: 0.500" in out
+    assert "MRR:    0.500" in out
