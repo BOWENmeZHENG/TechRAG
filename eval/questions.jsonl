@@ -1,10 +1,10 @@
 {"query": "What's the graph that autograd records?", "source": "pytorch/autograd.md", "evidence": "a graph recording all of the operations that created the data"}
-{"query": "How are the gradients computed?", "source": "pytorch/autograd.md", "evidence": "chain rule"}
+{"query": "How are the gradients computed automatically?", "source": "pytorch/autograd.md", "evidence": "tracing this graph from roots to leaves, you can automatically compute the gradients using the chain rule"}
 {"query": "When are two tensors 'broadcastable'?", "source": "pytorch/broadcasting.md", "evidence": "dimension sizes must either be equal, one of them is 1, or one of them does not exist"}
-{"query": "How to identify cases where backwards incompatibilities introduced by broadcasting may exist?", "source": "pytorch/broadcasting.md", "evidence": "torch.utils.backcompat.broadcast_warning.enabled to True"}
-{"query": "What is used to run CUDA operations?", "source": "pytorch/cuda.md", "evidence": "torch.cuda"}
+{"query": "How to identify cases where backwards incompatibilities introduced by broadcasting may exist?", "source": "pytorch/broadcasting.md", "evidence": "set `torch.utils.backcompat.broadcast_warning.enabled` to `True`"}
+{"query": "What is used to run CUDA operations?", "source": "pytorch/cuda.md", "evidence": "`torch.cuda`"}
 {"query": "How to disable reduced precision reductions in fp16 GEMMs?", "source": "pytorch/cuda.md", "evidence": "torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False"}
 {"query": "What does cuda runtime error(2): out of memory mean?", "source": "pytorch/faq.md", "evidence": "out of memory on your GPU"}
-{"query": "What does PyTorch use to speed up memory allocations", "source": "pytorch/faq.md", "evidence": "caching memory allocator"}
+{"query": "What does PyTorch use to speed up memory allocations", "source": "pytorch/cuda.md", "evidence": "caching memory allocator"}
 {"query": "What transformation does torch.nn.Linear module perform?", "source": "pytorch/modules.md", "evidence": "affine transformation"}
 {"query": "How to chain multiple modules together?", "source": "pytorch/modules.md", "evidence": "torch.nn.Sequential"}
