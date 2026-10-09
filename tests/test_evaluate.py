@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from techrag.evaluate import Question, first_relevant_rank, load_questions
+from techrag.evaluate import Question, evaluate, first_relevant_rank, load_questions
 from techrag.retrieve import Result
 
 QUESTION = Question("q", Path("a.md"), "chain rule")
@@ -51,3 +51,19 @@ def test_first_relevant_rank_needs_right_source_and_evidence():
 
 def test_first_relevant_rank_ignores_case_and_whitespace():
     assert first_relevant_rank(QUESTION, [_result("a.md", "The Chain\n  RULE applies")]) == 1
+
+
+def test_evaluate_ranks_each_question_in_order_using_k():
+    by_query = {
+        "hit": [_result("a.md", "chain rule")],
+        "miss": [_result("b.md", "chain rule")],
+    }
+    calls = []
+
+    def retriever(query: str, k: int) -> list[Result]:
+        calls.append((query, k))
+        return by_query[query]
+
+    questions = [Question(q, Path("a.md"), "chain rule") for q in ("hit", "miss")]
+    assert evaluate(questions, k=3, retriever=retriever) == [1, None]
+    assert calls == [("hit", 3), ("miss", 3)]

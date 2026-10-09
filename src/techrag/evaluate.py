@@ -1,11 +1,11 @@
 """Evaluate TechRAG retrieval against the labelled questions in ``eval/questions.jsonl``."""
 
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from techrag.retrieve import Result
+from techrag.retrieve import Result, retrieve
 
 QUESTIONS_PATH = Path("eval/questions.jsonl")
 
@@ -68,3 +68,21 @@ def first_relevant_rank(question: Question, results: Sequence[Result]) -> int | 
         if r.source == question.source and evidence in _normalize(r.text):
             return rank
     return None
+
+
+def evaluate(
+    questions: Sequence[Question],
+    k: int = 5,
+    retriever: Callable[[str, int], Sequence[Result]] = retrieve,
+) -> list[int | None]:
+    """Return, for each question, the rank of its first relevant result among the top ``k``.
+
+    The ranks are in question order and feed ``techrag.metrics``; ``None`` marks a question
+    with no relevant result in the top ``k``. ``retriever`` takes a query and ``k`` and returns
+    results best first; it defaults to :func:`techrag.retrieve.retrieve` on the default index.
+
+    Raises:
+        ValueError: If ``retriever`` rejects ``k`` or a query (the default does).
+        FileNotFoundError: If the default retriever finds no index.
+    """
+    return [first_relevant_rank(q, retriever(q.query, k)) for q in questions]
