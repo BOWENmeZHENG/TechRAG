@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -84,12 +85,42 @@ def test_main_prints_per_question_ranks_and_metrics(tmp_path: Path, monkeypatch,
         return [_result("a.md", "chain rule")]
 
     monkeypatch.setattr(evaluate_module, "retrieve", fake_retrieve)
+    monkeypatch.chdir(tmp_path)  # the default output path is relative
     monkeypatch.setattr(
         "sys.argv", ["techrag-eval", "-k", "3", "--questions", str(_write_questions(tmp_path / "q"))]
     )
     main()
+    assert (tmp_path / "eval" / "results.json").is_file()
     out = capsys.readouterr().out
     assert "rank 1  hit" in out
     assert "miss  miss" in out
     assert "hit@3: 0.500" in out
     assert "MRR:    0.500" in out
+
+
+def test_main_writes_results_to_output_file(tmp_path: Path, monkeypatch):
+    def fake_retrieve(query: str, k: int, index_dir: Path, model_name: str) -> list[Result]:
+        return [_result("a.md", "chain rule")]
+
+    monkeypatch.setattr(evaluate_module, "retrieve", fake_retrieve)
+    output = tmp_path / "out.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "techrag-eval", "-k", "3", "--questions", str(_write_questions(tmp_path / "q")),
+            "--model", "m", "--output", str(output),
+        ],
+    )
+    main()
+    retrieved = [{"source": "a.md", "score": 1.0, "text": "chain rule"}]
+    assert json.loads(output.read_text(encoding="utf-8")) == {
+        "k": 3,
+        "model": "m",
+        "hit_at_k": 0.5,
+        "mrr": 0.5,
+        "questions": [
+            {"query": q, "source": "a.md", "rank": rank, "retrieved": retrieved}
+            for q, rank in (("hit", 1), ("miss", None))
+        ],
+    }
+

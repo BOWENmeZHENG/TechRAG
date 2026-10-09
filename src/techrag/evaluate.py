@@ -13,6 +13,7 @@ from techrag.metrics import hit_at_k, mean_reciprocal_rank
 from techrag.retrieve import Result, retrieve
 
 QUESTIONS_PATH = Path("eval/questions.jsonl")
+RESULTS_PATH = Path("eval/results.json")
 
 
 @dataclass(frozen=True)
@@ -100,15 +101,45 @@ def main() -> None:
     parser.add_argument("--questions", type=Path, default=QUESTIONS_PATH)
     parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
     parser.add_argument("--model", default=EMBEDDING_MODEL, help="must match the ingest model")
+    parser.add_argument(
+        "--output", type=Path, default=RESULTS_PATH, help="JSON file to write the results to"
+    )
     args = parser.parse_args()
 
     try:
         questions = load_questions(args.questions)
-        retriever = partial(retrieve, index_dir=args.index_dir, model_name=args.model)
+        retrieve_from_index = partial(retrieve, index_dir=args.index_dir, model_name=args.model)
+        retrieved: list[Sequence[Result]] = []  # per question, for the report
+
+        def retriever(query: str, k: int) -> Sequence[Result]:
+            results = retrieve_from_index(query, k)
+            retrieved.append(results)
+            return results
+
         ranks = evaluate(questions, args.k, retriever)
         hit = hit_at_k(ranks, args.k)
         mrr = mean_reciprocal_rank(ranks)
-    except (FileNotFoundError, ValueError) as e:
+        report = {
+            "k": args.k,
+            "model": args.model,
+            "hit_at_k": hit,
+            "mrr": mrr,
+            "questions": [
+                {
+                    "query": q.query,
+                    "source": str(q.source),
+                    "rank": rank,
+                    "retrieved": [
+                        {"source": str(r.source), "score": r.score, "text": r.text}
+                        for r in results
+                    ],
+                }
+                for q, rank, results in zip(questions, ranks, retrieved, strict=True)
+            ],
+        }
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    except (OSError, ValueError) as e:
         sys.exit(f"error: {e}")
 
     for q, rank in zip(questions, ranks, strict=True):
