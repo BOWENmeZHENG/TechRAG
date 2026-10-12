@@ -19,6 +19,7 @@ dependencies = [
 techrag-ingest = "techrag.ingest:main"
 techrag-retrieve = "techrag.retrieve:main"
 techrag-eval = "techrag.evaluate:main"
+techrag-ask = "techrag.generate:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
