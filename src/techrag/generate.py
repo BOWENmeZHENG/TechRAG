@@ -7,9 +7,10 @@ import urllib.request
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import get_args
 
 from techrag.ingest import EMBEDDING_MODEL, INDEX_DIR
-from techrag.retrieve import Result, retrieve
+from techrag.retrieve import Mode, Result, retrieve
 
 LLM_MODEL = "llama3.2:3b"
 OLLAMA_URL = "http://localhost:11434"
@@ -76,17 +77,20 @@ def answer(
     chat: Callable[[Sequence[dict[str, str]]], str] = ollama_chat,
     index_dir: Path = INDEX_DIR,
     embedding_model: str = EMBEDDING_MODEL,
+    mode: Mode = "dense",
 ) -> Answer:
     """Retrieve the ``k`` chunks most relevant to ``query`` and answer from them.
 
     ``chat`` takes the chat messages and returns the model's reply; it defaults to
-    :func:`ollama_chat` with the default model and server.
+    :func:`ollama_chat` with the default model and server. ``mode`` selects how chunks are
+    retrieved (``dense`` or ``bm25``); with ``bm25`` the model gets no passages if none share
+    a term with ``query``.
 
     Raises:
         ValueError, FileNotFoundError: As for :func:`techrag.retrieve.retrieve`.
         OSError, ValueError: If ``chat`` fails (the default does on an unreachable server).
     """
-    results = retrieve(query, k, index_dir, embedding_model)
+    results = retrieve(query, k, index_dir, embedding_model, mode)
     return Answer(text=chat(build_messages(query, results)).strip(), sources=results)
 
 
@@ -101,13 +105,16 @@ def main() -> None:
     parser.add_argument(
         "--embedding-model", default=EMBEDDING_MODEL, help="must match the ingest model"
     )
+    parser.add_argument("--mode", choices=get_args(Mode), default="dense", help="ranking method")
     args = parser.parse_args()
 
     def chat(messages: Sequence[dict[str, str]]) -> str:
         return ollama_chat(messages, args.llm, args.ollama_url)
 
     try:
-        result = answer(args.query, args.k, chat, args.index_dir, args.embedding_model)
+        result = answer(
+            args.query, args.k, chat, args.index_dir, args.embedding_model, args.mode
+        )
     except (OSError, ValueError) as e:
         sys.exit(f"error: {e}")
     print(result.text)

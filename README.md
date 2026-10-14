@@ -76,6 +76,7 @@ server, a model that hasn't been pulled, or a missing index exit with an `error:
 | `--ollama-url` | `http://localhost:11434` | Ollama server address |
 | `--index-dir` | `.index` | Index to search |
 | `--embedding-model` | `BAAI/bge-small-en-v1.5` | Must match the ingest model |
+| `--mode` | `dense` | Retrieval method: `dense` (embeddings) or `bm25` (keyword match) |
 
 ### 4. Evaluate
 

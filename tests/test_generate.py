@@ -71,7 +71,10 @@ def test_answer_chats(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
 
-    def fake_retrieve(query, k, index_dir, embedding_model):
+    calls = []
+
+    def fake_retrieve(query, k, index_dir, embedding_model, mode):
+        calls.append((query, k, index_dir, embedding_model, mode))
         return RESULTS
 
     def chat(messages):
@@ -79,9 +82,12 @@ def test_answer_chats(
 
     monkeypatch.setattr(generate, "retrieve", fake_retrieve)
 
-    result = answer("what is beta?", k=2, chat=chat, index_dir=tmp_path, embedding_model="m")
+    result = answer(
+        "what is beta?", k=2, chat=chat, index_dir=tmp_path, embedding_model="m", mode="bm25"
+    )
 
     assert result == Answer(text="per [1], beta.", sources=RESULTS)
+    assert calls == [("what is beta?", 2, tmp_path, "m", "bm25")]
 
 
 def test_main_prints_answer_and_numbered_sources(
