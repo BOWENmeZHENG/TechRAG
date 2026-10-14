@@ -42,7 +42,9 @@ uv run techrag-retrieve "How does broadcasting work?" -k 3
 ```
 
 Prints the `k` most similar chunks (default 5) with their source file and cosine similarity.
-`--index-dir` and `--model` must match what was used for ingest.
+`--index-dir` and `--model` must match what was used for ingest. `--mode bm25` ranks by keyword
+match (BM25) instead of embedding similarity and prints the BM25 score; chunks sharing no term
+with the query are not returned.
 
 ### 3. Ask
 

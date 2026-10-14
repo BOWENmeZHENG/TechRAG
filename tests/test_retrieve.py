@@ -66,6 +66,18 @@ def test_k_larger_than_index_returns_every_chunk(index_dir: Path) -> None:
     assert sorted(r.text for r in results) == ["alpha", "beta", "gamma"]
 
 
+def test_bm25_mode_ranks_by_keyword_match_and_skips_non_matching_chunks(index_dir: Path) -> None:
+    results = retrieve("gamma", k=3, index_dir=index_dir, mode="bm25")
+    assert [r.text for r in results] == ["gamma"]
+    assert results[0].source == Path("sub/b.md")
+    assert results[0].score > 0
+
+
+def test_unknown_mode_raises(index_dir: Path) -> None:
+    with pytest.raises(ValueError, match="mode must be one of"):
+        retrieve("find beta", index_dir=index_dir, mode="fuzzy")  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize("query", ["", "   \n"])
 def test_blank_query_raises(index_dir: Path, query: str) -> None:
     with pytest.raises(ValueError, match="Query"):
