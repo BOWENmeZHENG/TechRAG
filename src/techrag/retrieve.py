@@ -16,15 +16,19 @@ from techrag.ingest import EMBEDDING_MODEL, INDEX_DIR, _embed
 # carries this instruction. Passages (see ingest) are embedded without it.
 QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
-Mode = Literal["dense", "bm25"]
+Mode = Literal["dense", "bm25", "hybrid"]
+
+# Reciprocal rank fusion damping constant; 60 is the value from the original RRF paper.
+RRF_K = 60
 
 
 @dataclass(frozen=True)
 class Result:
     """A retrieved chunk: its source path, its text, and its score for the query.
 
-    The score is the cosine similarity in ``dense`` mode and the BM25 score in ``bm25`` mode,
-    so scores are only comparable between results of the same query and mode.
+    The score is the cosine similarity in ``dense`` mode, the BM25 score in ``bm25`` mode and the
+    reciprocal rank fusion score in ``hybrid`` mode, so scores are only comparable between
+    results of the same query and mode.
     """
 
     source: Path
@@ -41,10 +45,11 @@ def retrieve(
 ) -> list[Result]:
     """Return the ``k`` chunks most relevant to ``query``, best first.
 
-    ``mode`` is ``dense`` (embedding similarity) or ``bm25`` (keyword match). Fewer than ``k``
-    results are returned if the index holds fewer than ``k`` chunks, and ``bm25`` returns only
-    chunks sharing a term with the query. ``model_name`` must match the model the index was
-    built with; ``bm25`` does not use it.
+    ``mode`` is ``dense`` (embedding similarity), ``bm25`` (keyword match) or ``hybrid`` (the
+    dense and BM25 rankings merged by reciprocal rank fusion). Fewer than ``k`` results are
+    returned if the index holds fewer than ``k`` chunks, and ``bm25`` returns only chunks
+    sharing a term with the query. ``model_name`` must match the model the index was built
+    with; ``bm25`` does not use it.
 
     Raises:
         ValueError: If ``query`` is blank, ``k`` is not positive, ``mode`` is unknown, or the
@@ -71,19 +76,47 @@ def retrieve(
         )
 
     if mode == "bm25":
-        scores = BM25([r["text"] for r in records]).scores(query)
-        ranked = sorted((i for i, s in enumerate(scores) if s > 0), key=lambda i: (-scores[i], i))
-        return [
-            Result(source=Path(records[i]["source"]), text=records[i]["text"], score=scores[i])
-            for i in ranked[:k]
-        ]
-
-    vectors = _embed([QUERY_PREFIX + query], model_name)
-    scores, ids = index.search(vectors, min(k, index.ntotal))
+        ranked = _bm25_ranking(query, records)
+    elif mode == "dense":
+        ranked = _dense_ranking(query, index, model_name, k)
+    else:
+        ranked = _rrf(
+            _dense_ranking(query, index, model_name, index.ntotal),
+            _bm25_ranking(query, records),
+        )
     return [
-        Result(source=Path(records[i]["source"]), text=records[i]["text"], score=float(s))
-        for s, i in zip(scores[0], ids[0], strict=True)
+        Result(source=Path(records[i]["source"]), text=records[i]["text"], score=score)
+        for i, score in ranked[:k]
     ]
+
+
+def _dense_ranking(
+    query: str, index: faiss.Index, model_name: str, n: int
+) -> list[tuple[int, float]]:
+    """Return the ``n`` chunk ids most similar to ``query`` with their cosine similarity."""
+    vectors = _embed([QUERY_PREFIX + query], model_name)
+    scores, ids = index.search(vectors, min(n, index.ntotal))
+    return [(int(i), float(s)) for s, i in zip(scores[0], ids[0], strict=True)]
+
+
+def _bm25_ranking(query: str, records: list[dict]) -> list[tuple[int, float]]:
+    """Return the chunks sharing a term with ``query`` as (id, BM25 score), best first."""
+    scores = BM25([r["text"] for r in records]).scores(query)
+    ranked = sorted((i for i, s in enumerate(scores) if s > 0), key=lambda i: (-scores[i], i))
+    return [(i, scores[i]) for i in ranked]
+
+
+def _rrf(*rankings: list[tuple[int, float]]) -> list[tuple[int, float]]:
+    """Merge best-first rankings by reciprocal rank fusion, best first.
+
+    A chunk's score is the sum of ``1 / (RRF_K + rank)`` over the rankings it appears in. Ties
+    are broken by chunk id so the order is deterministic.
+    """
+    fused: dict[int, float] = {}
+    for ranking in rankings:
+        for rank, (i, _) in enumerate(ranking, start=1):
+            fused[i] = fused.get(i, 0.0) + 1 / (RRF_K + rank)
+    return sorted(fused.items(), key=lambda item: (-item[1], item[0]))
 
 
 def main() -> None:

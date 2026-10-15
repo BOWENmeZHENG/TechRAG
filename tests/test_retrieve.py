@@ -7,7 +7,7 @@ import pytest
 
 from techrag import ingest
 from techrag.ingest import Chunk, embed_and_store
-from techrag.retrieve import QUERY_PREFIX, retrieve
+from techrag.retrieve import QUERY_PREFIX, _rrf, retrieve
 
 
 class FakeSentenceTransformer:
@@ -71,6 +71,35 @@ def test_bm25_mode_ranks_by_keyword_match_and_skips_non_matching_chunks(index_di
     assert [r.text for r in results] == ["gamma"]
     assert results[0].source == Path("sub/b.md")
     assert results[0].score > 0
+
+
+def test_hybrid_mode_ranks_chunk_found_by_both_methods_first(index_dir: Path) -> None:
+    # Dense ranks beta, gamma, alpha; BM25 matches only "beta".
+    results = retrieve("find beta", k=3, index_dir=index_dir, mode="hybrid")
+    print(results)
+
+    assert [r.text for r in results] == ["beta", "gamma", "alpha"]
+    assert results[0].source == Path("sub/b.md")
+    assert results[0].score == pytest.approx(2 / 61)
+    assert results[1].score == pytest.approx(1 / 62)
+    assert results[2].score == pytest.approx(1 / 63)
+
+
+def test_hybrid_mode_fuses_ranks_from_both_rankings() -> None:
+    dense = [(0, 0.9), (1, 0.5), (2, 0.1)]
+    bm25 = [(2, 7.0), (1, 3.0)]
+
+    fused = _rrf(dense, bm25)
+
+    # id 1 is rank 2 and 2; id 2 is rank 3 and 1; id 0 is rank 1 in one ranking only.
+    assert [i for i, _ in fused] == [1, 2, 0]
+    assert dict(fused)[1] == pytest.approx(2 / 62)
+    assert dict(fused)[2] == pytest.approx(1 / 63 + 1 / 61)
+    assert dict(fused)[0] == pytest.approx(1 / 61)
+
+
+def test_hybrid_mode_respects_k(index_dir: Path) -> None:
+    assert len(retrieve("find beta", k=2, index_dir=index_dir, mode="hybrid")) == 2
 
 
 def test_unknown_mode_raises(index_dir: Path) -> None:

@@ -83,8 +83,8 @@ def answer(
 
     ``chat`` takes the chat messages and returns the model's reply; it defaults to
     :func:`ollama_chat` with the default model and server. ``mode`` selects how chunks are
-    retrieved (``dense`` or ``bm25``); with ``bm25`` the model gets no passages if none share
-    a term with ``query``.
+    retrieved (``dense``, ``bm25`` or ``hybrid``); with ``bm25`` the model gets no passages if
+    none share a term with ``query``.
 
     Raises:
         ValueError, FileNotFoundError: As for :func:`techrag.retrieve.retrieve`.
