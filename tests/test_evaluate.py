@@ -81,7 +81,9 @@ def _write_questions(path: Path) -> Path:
 
 
 def test_main_prints_per_question_ranks_and_metrics(tmp_path: Path, monkeypatch, capsys):
-    def fake_retrieve(query: str, k: int, index_dir: Path, model_name: str) -> list[Result]:
+    def fake_retrieve(
+        query: str, k: int, index_dir: Path, model_name: str, mode: str
+    ) -> list[Result]:
         return [_result("a.md", "chain rule")]
 
     monkeypatch.setattr(evaluate_module, "retrieve", fake_retrieve)
@@ -99,7 +101,9 @@ def test_main_prints_per_question_ranks_and_metrics(tmp_path: Path, monkeypatch,
 
 
 def test_main_writes_results_to_output_file(tmp_path: Path, monkeypatch):
-    def fake_retrieve(query: str, k: int, index_dir: Path, model_name: str) -> list[Result]:
+    def fake_retrieve(
+        query: str, k: int, index_dir: Path, model_name: str, mode: str
+    ) -> list[Result]:
         return [_result("a.md", "chain rule")]
 
     monkeypatch.setattr(evaluate_module, "retrieve", fake_retrieve)
@@ -108,7 +112,7 @@ def test_main_writes_results_to_output_file(tmp_path: Path, monkeypatch):
         "sys.argv",
         [
             "techrag-eval", "-k", "3", "--questions", str(_write_questions(tmp_path / "q")),
-            "--model", "m", "--output", str(output),
+            "--model", "m", "--mode", "hybrid", "--output", str(output),
         ],
     )
     main()
@@ -116,6 +120,7 @@ def test_main_writes_results_to_output_file(tmp_path: Path, monkeypatch):
     assert json.loads(output.read_text(encoding="utf-8")) == {
         "k": 3,
         "model": "m",
+        "mode": "hybrid",
         "hit_at_k": 0.5,
         "mrr": 0.5,
         "questions": [

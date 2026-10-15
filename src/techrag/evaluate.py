@@ -7,10 +7,11 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from typing import get_args
 
 from techrag.ingest import EMBEDDING_MODEL, INDEX_DIR
 from techrag.metrics import hit_at_k, mean_reciprocal_rank
-from techrag.retrieve import Result, retrieve
+from techrag.retrieve import Mode, Result, retrieve
 
 QUESTIONS_PATH = Path("eval/questions.jsonl")
 RESULTS_PATH = Path("eval/results.json")
@@ -101,6 +102,7 @@ def main() -> None:
     parser.add_argument("--questions", type=Path, default=QUESTIONS_PATH)
     parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
     parser.add_argument("--model", default=EMBEDDING_MODEL, help="must match the ingest model")
+    parser.add_argument("--mode", choices=get_args(Mode), default="dense", help="ranking method")
     parser.add_argument(
         "--output", type=Path, default=RESULTS_PATH, help="JSON file to write the results to"
     )
@@ -108,7 +110,9 @@ def main() -> None:
 
     try:
         questions = load_questions(args.questions)
-        retrieve_from_index = partial(retrieve, index_dir=args.index_dir, model_name=args.model)
+        retrieve_from_index = partial(
+            retrieve, index_dir=args.index_dir, model_name=args.model, mode=args.mode
+        )
         retrieved: list[Sequence[Result]] = []  # per question, for the report
 
         def retriever(query: str, k: int) -> Sequence[Result]:
@@ -122,6 +126,7 @@ def main() -> None:
         report = {
             "k": args.k,
             "model": args.model,
+            "mode": args.mode,
             "hit_at_k": hit,
             "mrr": mrr,
             "questions": [
