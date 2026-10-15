@@ -84,6 +84,7 @@ server, a model that hasn't been pulled, or a missing index exit with an `error:
 
 ```sh
 uv run techrag-eval -k 5
+uv run techrag-eval -k 5 --mode hybrid
 ```
 
 Runs every question in [eval/questions.jsonl](eval/questions.jsonl) against the index and
@@ -96,6 +97,10 @@ A retrieved chunk counts as relevant if it comes from the question's `source` fi
 contains its `evidence` text (case and whitespace are ignored). Full per-question output,
 including the retrieved chunks, is written to `eval/results.json` (git-ignored; change it
 with `--output`).
+
+`--mode` selects the retrieval method being measured: `dense` (the default), `bm25` or
+`hybrid`, as in [Search](#2-search). Run once per mode to compare them; the mode used is
+recorded in the results file. `--index-dir` and `--model` must match what was used for ingest.
 
 Each line of the questions file is a JSON object:
 
