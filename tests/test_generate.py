@@ -51,7 +51,11 @@ def test_ollama_chat_request_and_reply(
     assert reply == "hello"
     (request,) = requests
     assert request.full_url == "http://example:1234/api/chat"  # trailing slash is dropped
-    assert json.loads(request.data) == {"model": "some-model", "messages": messages, "stream": False}
+    assert json.loads(request.data) == {
+        "model": "some-model",
+        "messages": messages,
+        "stream": False,
+    }
 
 
 def test_ollama_chat_unexpected_response_raises_value_error(

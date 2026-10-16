@@ -88,9 +88,8 @@ def test_main_prints_per_question_ranks_and_metrics(tmp_path: Path, monkeypatch,
 
     monkeypatch.setattr(evaluate_module, "retrieve", fake_retrieve)
     monkeypatch.chdir(tmp_path)  # the default output path is relative
-    monkeypatch.setattr(
-        "sys.argv", ["techrag-eval", "-k", "3", "--questions", str(_write_questions(tmp_path / "q"))]
-    )
+    questions = _write_questions(tmp_path / "q")
+    monkeypatch.setattr("sys.argv", ["techrag-eval", "-k", "3", "--questions", str(questions)])
     main()
     assert (tmp_path / "eval" / "results.json").is_file()
     out = capsys.readouterr().out

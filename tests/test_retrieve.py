@@ -92,7 +92,7 @@ def test_hybrid_mode_fuses_ranks_from_both_rankings() -> None:
     fused = _rrf(dense, bm25)
 
     # id 1 is rank 2 and 2; id 2 is rank 3 and 1; id 0 is rank 1 in one ranking only.
-    assert [i for i, _ in fused] == [1, 2, 0]
+    assert [i for i, _ in fused] == [2, 1, 0]
     assert dict(fused)[1] == pytest.approx(2 / 62)
     assert dict(fused)[2] == pytest.approx(1 / 63 + 1 / 61)
     assert dict(fused)[0] == pytest.approx(1 / 61)

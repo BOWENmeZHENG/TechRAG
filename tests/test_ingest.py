@@ -49,7 +49,7 @@ def test_chunk_overlaps_adjacent_chunks() -> None:
     chunks = chunk(text, size=100, overlap=30)
 
     assert len(chunks) > 1
-    for prev, nxt in zip(chunks, chunks[1:]):
+    for prev, nxt in zip(chunks, chunks[1:], strict=False):
         assert prev.split()[-1] in nxt.split()
 
 
