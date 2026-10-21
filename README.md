@@ -110,6 +110,53 @@ Each line of the questions file is a JSON object:
 
 `source` is relative to the data directory.
 
+### 5. Serve
+
+```sh
+uv run techrag-serve
+```
+
+Starts an HTTP API on `http://127.0.0.1:8000`. The index is read and the embedding model is
+loaded once at startup (so it can take a few seconds to come up), not per request. A missing
+or inconsistent index exits with an `error: ...` message. Interactive docs are at `/docs`.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--host` | `127.0.0.1` | Address to listen on |
+| `--port` | `8000` | Port to listen on |
+| `--index-dir` | `.index` | Index to serve |
+| `--embedding-model` | `BAAI/bge-small-en-v1.5` | Must match the ingest model |
+| `--llm` | `llama3.2:3b` | Ollama model used by `/ask` |
+| `--ollama-url` | `http://localhost:11434` | Ollama server address |
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /healthz` | Returns `{"status": "ok", "chunks": <number of indexed chunks>}` |
+| `POST /search` | Returns the top `k` chunks for a query, as in [Search](#2-search) |
+| `POST /ask` | Answers a query from the top `k` chunks with Ollama, as in [Ask](#3-ask) |
+
+`/search` and `/ask` take the same JSON body; `k` (default `5`, at least 1) and `mode` (`dense`,
+`bm25` or `hybrid`; default `dense`) are optional:
+
+```sh
+curl -s localhost:8000/search -H 'Content-Type: application/json' \
+  -d '{"query": "How does broadcasting work?", "k": 3, "mode": "hybrid"}'
+```
+
+```json
+{"results": [{"source": "pytorch/broadcasting.md", "text": "...", "score": 0.033}]}
+```
+
+`/ask` returns the answer and the chunks it was generated from, numbered by position, so a
+citation like `[2]` refers to `sources[1]`:
+
+```json
+{"answer": "Tensors are broadcastable when ... [1]", "sources": [{"source": "pytorch/broadcasting.md", "text": "...", "score": 0.812}]}
+```
+
+A blank query, a `k` below 1 or an unknown `mode` returns `422`. If Ollama is unreachable or
+replies unexpectedly, `/ask` returns `502`.
+
 ## Development
 
 ```sh
@@ -126,6 +173,7 @@ src/techrag/
   ingest.py        Load, chunk, embed, and store documents
   retrieve.py      Query the index
   generate.py      Answer a question from retrieved chunks with Ollama
+  api.py           FastAPI app serving search and ask
   evaluate.py      Run the eval questions
   metrics.py       hit@k and MRR
 tests/

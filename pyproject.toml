@@ -22,6 +22,7 @@ techrag-ingest = "techrag.ingest:main"
 techrag-retrieve = "techrag.retrieve:main"
 techrag-eval = "techrag.evaluate:main"
 techrag-ask = "techrag.generate:main"
+techrag-serve = "techrag.api:main"
 
 [dependency-groups]
 dev = [
