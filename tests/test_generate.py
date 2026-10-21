@@ -6,7 +6,15 @@ from pathlib import Path
 import pytest
 
 from techrag import generate
-from techrag.generate import SYSTEM_PROMPT, Answer, answer, build_messages, main, ollama_chat
+from techrag.generate import (
+    SYSTEM_PROMPT,
+    Answer,
+    answer,
+    answer_from,
+    build_messages,
+    main,
+    ollama_chat,
+)
 from techrag.retrieve import Result
 
 RESULTS = [
@@ -92,6 +100,26 @@ def test_answer_chats(
 
     assert result == Answer(text="per [1], beta.", sources=RESULTS)
     assert calls == [("what is beta?", 2, tmp_path, "m", "bm25")]
+
+
+def test_answer_from_uses_given_results_without_retrieving(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_retrieve(*args):
+        raise AssertionError("answer_from must not retrieve")
+
+    monkeypatch.setattr(generate, "retrieve", fail_retrieve)
+    sent = []
+
+    def chat(messages):
+        sent.append(messages)
+        return "  per [1], beta.\n"
+
+    result = answer_from("what is beta?", tuple(RESULTS), chat)
+
+    assert result == Answer(text="per [1], beta.", sources=RESULTS)
+    assert isinstance(result.sources, list)  # a tuple input is copied into a list
+    assert sent == [build_messages("what is beta?", RESULTS)]
 
 
 def test_main_prints_answer_and_numbered_sources(

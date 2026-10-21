@@ -4,13 +4,14 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import Literal, get_args
 
 import faiss
 
 from techrag.bm25 import BM25
-from techrag.ingest import EMBEDDING_MODEL, INDEX_DIR, _embed
+from techrag.ingest import EMBEDDING_MODEL, INDEX_DIR, _embed, _load_model
 
 # BGE models are trained to match short queries against longer passages when the query
 # carries this instruction. Passages (see ingest) are embedded without it.
@@ -36,6 +37,89 @@ class Result:
     score: float
 
 
+class Retriever:
+    """A loaded index that answers many queries without re-reading it from disk.
+
+    Reads the FAISS index and ``chunks.json`` once on construction. The BM25 statistics are built
+    on first use and the embedding model is loaded on the first dense or hybrid query;
+    :meth:`warm_up` does both up front, e.g. at server startup. Searches only read this state,
+    so one instance can serve concurrent callers.
+
+    Raises:
+        FileNotFoundError: If ``index_dir`` does not contain an index built by ingest.
+        ValueError: If the index and ``chunks.json`` disagree on the number of chunks.
+    """
+
+    def __init__(self, index_dir: Path = INDEX_DIR, model_name: str = EMBEDDING_MODEL) -> None:
+        index_path = index_dir / "index.faiss"
+        chunks_path = index_dir / "chunks.json"
+        if not index_path.is_file() or not chunks_path.is_file():
+            raise FileNotFoundError(f"No index found in {index_dir}; run techrag-ingest first")
+        self._model_name = model_name
+        self._index = faiss.read_index(str(index_path))
+        self._records = json.loads(chunks_path.read_text(encoding="utf-8"))
+        if self._index.ntotal != len(self._records):
+            raise ValueError(
+                f"Index has {self._index.ntotal} vectors but chunks.json has "
+                f"{len(self._records)} chunks; re-run techrag-ingest"
+            )
+
+    def __len__(self) -> int:
+        """Return the number of chunks in the index."""
+        return len(self._records)
+
+    @cached_property
+    def _bm25(self) -> BM25:
+        return BM25([r["text"] for r in self._records])
+
+    def warm_up(self) -> None:
+        """Load the embedding model and build the BM25 statistics now rather than on first use."""
+        _load_model(self._model_name)
+        _ = self._bm25
+
+    def search(self, query: str, k: int = 5, mode: Mode = "dense") -> list[Result]:
+        """Return the ``k`` chunks most relevant to ``query``, best first.
+
+        See :func:`retrieve` for what the modes mean and what is returned.
+
+        Raises:
+            ValueError: If ``query`` is blank, ``k`` is not positive or ``mode`` is unknown.
+        """
+        if not query.strip():
+            raise ValueError("Query must not be empty")
+        if k <= 0:
+            raise ValueError(f"k must be positive, got {k}")
+        if mode not in get_args(Mode):
+            raise ValueError(f"mode must be one of {', '.join(get_args(Mode))}, got {mode!r}")
+
+        if mode == "bm25":
+            ranked = self._bm25_ranking(query)
+        elif mode == "dense":
+            ranked = self._dense_ranking(query, k)
+        else:
+            ranked = _rrf(
+                self._dense_ranking(query, self._index.ntotal), self._bm25_ranking(query)
+            )
+        return [
+            Result(
+                source=Path(self._records[i]["source"]), text=self._records[i]["text"], score=score
+            )
+            for i, score in ranked[:k]
+        ]
+
+    def _dense_ranking(self, query: str, n: int) -> list[tuple[int, float]]:
+        """Return the ``n`` chunk ids most similar to ``query`` with their cosine similarity."""
+        vectors = _embed([QUERY_PREFIX + query], self._model_name)
+        scores, ids = self._index.search(vectors, min(n, self._index.ntotal))
+        return [(int(i), float(s)) for s, i in zip(scores[0], ids[0], strict=True)]
+
+    def _bm25_ranking(self, query: str) -> list[tuple[int, float]]:
+        """Return the chunks sharing a term with ``query`` as (id, BM25 score), best first."""
+        scores = self._bm25.scores(query)
+        ranked = sorted((i for i, s in enumerate(scores) if s > 0), key=lambda i: (-scores[i], i))
+        return [(i, scores[i]) for i in ranked]
+
+
 def retrieve(
     query: str,
     k: int = 5,
@@ -51,59 +135,15 @@ def retrieve(
     sharing a term with the query. ``model_name`` must match the model the index was built
     with; ``bm25`` does not use it.
 
+    This loads the index on every call; to answer many queries, build a :class:`Retriever` once
+    and call its :meth:`~Retriever.search`.
+
     Raises:
         ValueError: If ``query`` is blank, ``k`` is not positive, ``mode`` is unknown, or the
             index and ``chunks.json`` in ``index_dir`` disagree on the number of chunks.
         FileNotFoundError: If ``index_dir`` does not contain an index built by ingest.
     """
-    if not query.strip():
-        raise ValueError("Query must not be empty")
-    if k <= 0:
-        raise ValueError(f"k must be positive, got {k}")
-    if mode not in get_args(Mode):
-        raise ValueError(f"mode must be one of {', '.join(get_args(Mode))}, got {mode!r}")
-    index_path = index_dir / "index.faiss"
-    chunks_path = index_dir / "chunks.json"
-    if not index_path.is_file() or not chunks_path.is_file():
-        raise FileNotFoundError(f"No index found in {index_dir}; run techrag-ingest first")
-
-    index = faiss.read_index(str(index_path))
-    records = json.loads(chunks_path.read_text(encoding="utf-8"))
-    if index.ntotal != len(records):
-        raise ValueError(
-            f"Index has {index.ntotal} vectors but chunks.json has {len(records)} chunks; "
-            "re-run techrag-ingest"
-        )
-
-    if mode == "bm25":
-        ranked = _bm25_ranking(query, records)
-    elif mode == "dense":
-        ranked = _dense_ranking(query, index, model_name, k)
-    else:
-        ranked = _rrf(
-            _dense_ranking(query, index, model_name, index.ntotal),
-            _bm25_ranking(query, records),
-        )
-    return [
-        Result(source=Path(records[i]["source"]), text=records[i]["text"], score=score)
-        for i, score in ranked[:k]
-    ]
-
-
-def _dense_ranking(
-    query: str, index: faiss.Index, model_name: str, n: int
-) -> list[tuple[int, float]]:
-    """Return the ``n`` chunk ids most similar to ``query`` with their cosine similarity."""
-    vectors = _embed([QUERY_PREFIX + query], model_name)
-    scores, ids = index.search(vectors, min(n, index.ntotal))
-    return [(int(i), float(s)) for s, i in zip(scores[0], ids[0], strict=True)]
-
-
-def _bm25_ranking(query: str, records: list[dict]) -> list[tuple[int, float]]:
-    """Return the chunks sharing a term with ``query`` as (id, BM25 score), best first."""
-    scores = BM25([r["text"] for r in records]).scores(query)
-    ranked = sorted((i for i, s in enumerate(scores) if s > 0), key=lambda i: (-scores[i], i))
-    return [(i, scores[i]) for i in ranked]
+    return Retriever(index_dir, model_name).search(query, k, mode)
 
 
 def _rrf(*rankings: list[tuple[int, float]]) -> list[tuple[int, float]]:

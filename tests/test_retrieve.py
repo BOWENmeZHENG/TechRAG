@@ -5,9 +5,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import techrag.retrieve as retrieve_module
 from techrag import ingest
 from techrag.ingest import Chunk, embed_and_store
-from techrag.retrieve import QUERY_PREFIX, _rrf, retrieve
+from techrag.retrieve import QUERY_PREFIX, Retriever, _rrf, retrieve
 
 
 class FakeSentenceTransformer:
@@ -76,7 +77,6 @@ def test_bm25_mode_ranks_by_keyword_match_and_skips_non_matching_chunks(index_di
 def test_hybrid_mode_ranks_chunk_found_by_both_methods_first(index_dir: Path) -> None:
     # Dense ranks beta, gamma, alpha; BM25 matches only "beta".
     results = retrieve("find beta", k=3, index_dir=index_dir, mode="hybrid")
-    print(results)
 
     assert [r.text for r in results] == ["beta", "gamma", "alpha"]
     assert results[0].source == Path("sub/b.md")
@@ -131,3 +131,51 @@ def test_index_and_chunks_out_of_sync_raises(index_dir: Path) -> None:
 
     with pytest.raises(ValueError, match="re-run techrag-ingest"):
         retrieve("find beta", index_dir=index_dir)
+
+
+def test_retriever_answers_many_queries_in_any_mode(index_dir: Path) -> None:
+    retriever = Retriever(index_dir)
+
+    dense = retriever.search("find beta", k=1)
+    bm25 = retriever.search("gamma", k=1, mode="bm25")
+    hybrid = retriever.search("find beta", k=1, mode="hybrid")
+    dense_again = retriever.search("find beta", k=1)
+
+    assert [r.text for r in dense] == ["beta"]
+    assert [r.text for r in bm25] == ["gamma"]
+    assert [r.text for r in hybrid] == ["beta"]
+    assert dense_again == dense
+
+
+def test_retriever_len_is_number_of_chunks(index_dir: Path) -> None:
+    assert len(Retriever(index_dir)) == 3
+
+
+def test_retriever_builds_bm25_only_on_first_use_and_reuses_it(index_dir: Path) -> None:
+    retriever = Retriever(index_dir)
+
+    retriever.search("find beta")  # dense mode doesn't need BM25
+    assert "_bm25" not in vars(retriever)
+
+    retriever.search("gamma", mode="bm25")
+    built = vars(retriever)["_bm25"]
+    retriever.search("find beta", mode="hybrid")
+    assert retriever._bm25 is built
+
+
+def test_warm_up_loads_model_and_builds_bm25(
+    index_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    loaded: list[str] = []
+    monkeypatch.setattr(retrieve_module, "_load_model", loaded.append)
+    retriever = Retriever(index_dir, model_name="my-model")
+
+    retriever.warm_up()
+
+    assert loaded == ["my-model"]
+    assert "_bm25" in vars(retriever)
+
+
+def test_retriever_missing_index_raises_file_not_found(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="techrag-ingest"):
+        Retriever(tmp_path)

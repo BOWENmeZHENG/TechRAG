@@ -11,8 +11,10 @@ requires-python = ">=3.12"
 authors = [{ name = "Bowen Zheng", email = "bowenzheng01@gmail.com" }]
 dependencies = [
     "faiss-cpu>=1.15.1",
+    "fastapi>=0.148.0",
     "langchain-text-splitters>=1.1.2",
     "sentence-transformers>=6.1.0",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]
@@ -20,9 +22,14 @@ techrag-ingest = "techrag.ingest:main"
 techrag-retrieve = "techrag.retrieve:main"
 techrag-eval = "techrag.evaluate:main"
 techrag-ask = "techrag.generate:main"
+techrag-serve = "techrag.api:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8",
+    "ruff>=0.6",
+]
 
 [tool.ruff]
 line-length = 100

@@ -91,7 +91,20 @@ def answer(
         OSError, ValueError: If ``chat`` fails (the default does on an unreachable server).
     """
     results = retrieve(query, k, index_dir, embedding_model, mode)
-    return Answer(text=chat(build_messages(query, results)).strip(), sources=results)
+    return answer_from(query, results, chat)
+
+
+def answer_from(
+    query: str,
+    results: Sequence[Result],
+    chat: Callable[[Sequence[dict[str, str]]], str] = ollama_chat,
+) -> Answer:
+    """Answer ``query`` from already retrieved ``results``, best first.
+
+    Raises:
+        OSError, ValueError: If ``chat`` fails (the default does on an unreachable server).
+    """
+    return Answer(text=chat(build_messages(query, results)).strip(), sources=list(results))
 
 
 def main() -> None:
