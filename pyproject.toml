@@ -14,6 +14,7 @@ dependencies = [
     "fastapi>=0.148.0",
     "langchain-text-splitters>=1.1.2",
     "sentence-transformers>=6.1.0",
+    "torch>=2.14",
     "uvicorn>=0.54.0",
 ]
 
@@ -30,6 +31,16 @@ dev = [
     "pytest>=8",
     "ruff>=0.6",
 ]
+
+# Linux gets the CPU-only torch build (no CUDA libraries), which keeps the Docker image and CI
+# installs small. Other platforms use the default PyPI wheels, which are already CPU-only.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 line-length = 100
