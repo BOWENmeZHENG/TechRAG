@@ -169,8 +169,10 @@ docker compose up --build
 docker compose exec ollama ollama pull llama3.2:3b   # once
 ```
 
-Builds the API image and starts it alongside an Ollama container, with the API on
-`http://localhost:8000` (see [Serve](#5-serve) for the endpoints). The image runs
+Builds the API image and the web UI image and starts them alongside an Ollama container. The
+web UI is on `http://localhost:8080` (nginx serves the built React app from [web/](web/) and
+forwards `/api/*` to the API), and the API is on `http://localhost:8000` (see
+[Serve](#5-serve) for the endpoints). The image runs
 `techrag-ingest` on [data/](data/) at build time, so the index and the embedding model are
 baked in and the container needs no network access to the Hugging Face Hub at runtime.
 Rebuild (`docker compose up --build`) after changing the docs in `data/`.
@@ -216,5 +218,5 @@ src/techrag/
 tests/
 .github/workflows/ CI: ruff and pytest
 Dockerfile         Image with the index and embedding model baked in
-docker-compose.yml API plus an Ollama server
+docker-compose.yml Web UI and API, plus an Ollama server
 ```
