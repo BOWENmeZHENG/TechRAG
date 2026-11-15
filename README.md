@@ -157,6 +157,42 @@ citation like `[2]` refers to `sources[1]`:
 A blank query, a `k` below 1 or an unknown `mode` returns `422`. If Ollama is unreachable or
 replies unexpectedly, `/ask` returns `502`.
 
+## Docker
+
+Docker is for running the API, not for development. Build the index, search, ask and
+evaluate locally with `uv run ...` as above. The image runs `techrag-ingest` once at build
+time and does not include `eval/`, so to pick up changes to `data/` or the code you rebuild
+the image rather than re-ingesting inside a container.
+
+```sh
+docker compose up --build
+docker compose exec ollama ollama pull llama3.2:3b   # once
+```
+
+Builds the API image and starts it alongside an Ollama container, with the API on
+`http://localhost:8000` (see [Serve](#5-serve) for the endpoints). The image runs
+`techrag-ingest` on [data/](data/) at build time, so the index and the embedding model are
+baked in and the container needs no network access to the Hugging Face Hub at runtime.
+Rebuild (`docker compose up --build`) after changing the docs in `data/`.
+
+- `/ask` needs the Ollama model to be pulled into the `ollama` service, as above. It is stored
+  in the `ollama` volume, so this is only needed once. `/search` and `/healthz` work without it.
+- The container listens on `0.0.0.0` and runs as a non-root user. Extra `techrag-serve`
+  options (such as `--llm`) can be added under `command:` in
+  [docker-compose.yml](docker-compose.yml); the existing `--ollama-url` points at the
+  `ollama` service.
+- The image has a healthcheck that polls `/healthz`.
+
+To build and run the API image on its own:
+
+```sh
+docker build -t techrag .
+docker run --rm -p 8000:8000 techrag --ollama-url http://host.docker.internal:11434
+```
+
+`host.docker.internal` works on Docker Desktop; on Linux add
+`--add-host host.docker.internal:host-gateway`.
+
 ## Development
 
 ```sh
@@ -171,10 +207,14 @@ data/              Markdown documentation to index
 eval/              Labelled questions (and generated results)
 src/techrag/
   ingest.py        Load, chunk, embed, and store documents
-  retrieve.py      Query the index
+  retrieve.py      Query the index (dense, BM25 or hybrid)
+  bm25.py          BM25 keyword ranking
   generate.py      Answer a question from retrieved chunks with Ollama
   api.py           FastAPI app serving search and ask
   evaluate.py      Run the eval questions
   metrics.py       hit@k and MRR
 tests/
+.github/workflows/ CI: ruff and pytest
+Dockerfile         Image with the index and embedding model baked in
+docker-compose.yml API plus an Ollama server
 ```
