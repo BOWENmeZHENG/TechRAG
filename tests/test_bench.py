@@ -9,6 +9,7 @@ from techrag.bench import (
     build_subset,
     doc_id_of,
     load_questions,
+    read_questions,
     render_document,
     sample_distractors,
     write_questions,
@@ -123,6 +124,22 @@ def test_build_subset_missing_gold_document_raises(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="gold documents are not in the corpus"):
         build_subset(bench, tmp_path / "out")
+
+
+def test_read_questions_round_trips_write_questions(tmp_path: Path) -> None:
+    questions = load_questions(_write_bench(tmp_path / "bench"))
+    path = tmp_path / "q.jsonl"
+    write_questions(questions, path)
+    assert read_questions(path) == questions
+
+
+def test_read_questions_rejects_bad_line_with_line_number(tmp_path: Path) -> None:
+    path = tmp_path / "q.jsonl"
+    path.write_text('{"question_id": "q1"}\n', encoding="utf-8")
+    with pytest.raises(ValueError, match=":1:"):
+        read_questions(path)
+    with pytest.raises(FileNotFoundError):
+        read_questions(tmp_path / "nope.jsonl")
 
 
 def test_build_subset_writes_questions_jsonl(tmp_path: Path) -> None:

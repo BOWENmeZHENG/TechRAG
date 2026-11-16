@@ -80,6 +80,36 @@ def write_questions(questions: Iterable[BenchQuestion], path: Path) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def read_questions(path: Path) -> list[BenchQuestion]:
+    """Read the questions :func:`write_questions` wrote to the JSON Lines file at ``path``.
+
+    Raises:
+        FileNotFoundError: If ``path`` is not an existing file.
+        ValueError: If a line is not a valid question record. The message names the line.
+    """
+    if not path.is_file():
+        raise FileNotFoundError(f"Questions not found: {path}")
+    questions = []
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+            questions.append(
+                BenchQuestion(
+                    id=record["question_id"],
+                    type=record["question_type"],
+                    text=record["question"],
+                    expected_doc_ids=tuple(record["expected_doc_ids"]),
+                    gold_answer=record["gold_answer"],
+                    answer_facts=tuple(record["answer_facts"]),
+                )
+            )
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            raise ValueError(f"{path}:{lineno}: invalid question record: {e!r}") from e
+    return questions
+
+
 def doc_id_of(source: Path | str) -> str:
     """Return the benchmark document id of a subset file path such as ``jira/dsid_ab.md``."""
     return Path(source).stem.split(_DUPLICATE_SEP)[0]
