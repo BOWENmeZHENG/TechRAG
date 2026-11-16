@@ -38,7 +38,7 @@ def test_load_questions_rejects_bad_line_with_line_number(tmp_path: Path, line: 
 
 def _result(source: str, text: str) -> Result:
     # 1.0 is dummy score, won't be used by first_relevant_rank
-    return Result(source=Path(source), text=text, score=1.0) 
+    return Result(source=Path(source), text=text, score=1.0)
 
 
 def test_first_relevant_rank_needs_right_source_and_evidence():
@@ -110,8 +110,17 @@ def test_main_writes_results_to_output_file(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         "sys.argv",
         [
-            "techrag-eval", "-k", "3", "--questions", str(_write_questions(tmp_path / "q")),
-            "--model", "m", "--mode", "hybrid", "--output", str(output),
+            "techrag-eval",
+            "-k",
+            "3",
+            "--questions",
+            str(_write_questions(tmp_path / "q")),
+            "--model",
+            "m",
+            "--mode",
+            "hybrid",
+            "--output",
+            str(output),
         ],
     )
     main()
@@ -127,4 +136,3 @@ def test_main_writes_results_to_output_file(tmp_path: Path, monkeypatch):
             for q, rank in (("hit", 1), ("miss", None))
         ],
     }
-
