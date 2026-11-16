@@ -104,7 +104,7 @@ def embed_and_store(
 def main() -> None:
     """Entry point for the ``techrag-ingest`` command."""
     parser = argparse.ArgumentParser(description="Build the TechRAG index from Markdown docs.")
-    parser.add_argument("data_dir", nargs="?", type=Path, default=Path("data"))
+    parser.add_argument("data_dir", nargs="?", type=Path, default=Path("data/quicktest"))
     parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
     parser.add_argument("--size", type=int, default=500, help="max characters per chunk")
     parser.add_argument("--overlap", type=int, default=50, help="characters shared by chunks")

@@ -223,3 +223,6 @@ __marimo__/
 .index/
 # eval results
 results.json
+# downloaded datasets (e.g. from Hugging Face)
+data/external/*
+!data/external/.gitkeep
