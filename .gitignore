@@ -226,3 +226,5 @@ results.json
 # downloaded datasets (e.g. from Hugging Face)
 data/external/*
 !data/external/.gitkeep
+# generated benchmark subsets
+data/subsets/
