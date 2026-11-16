@@ -97,9 +97,7 @@ class Retriever:
         elif mode == "dense":
             ranked = self._dense_ranking(query, k)
         else:
-            ranked = _rrf(
-                self._dense_ranking(query, self._index.ntotal), self._bm25_ranking(query)
-            )
+            ranked = _rrf(self._dense_ranking(query, self._index.ntotal), self._bm25_ranking(query))
         return [
             Result(
                 source=Path(self._records[i]["source"]), text=self._records[i]["text"], score=score

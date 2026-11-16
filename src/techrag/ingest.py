@@ -72,9 +72,7 @@ def _load_model(model_name: str) -> SentenceTransformer:
 def _embed(chunks: list[str], model_name: str) -> np.ndarray:
     """Return L2-normalized float32 embeddings for ``chunks``, one row per chunk."""
     model = _load_model(model_name)
-    return model.encode(chunks, normalize_embeddings=True, convert_to_numpy=True).astype(
-        np.float32
-    )
+    return model.encode(chunks, normalize_embeddings=True, convert_to_numpy=True).astype(np.float32)
 
 
 def embed_and_store(

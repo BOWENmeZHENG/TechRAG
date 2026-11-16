@@ -53,9 +53,7 @@ def load_questions(path: Path = QUESTIONS_PATH) -> list[Question]:
             value = record.get(field)
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{path}:{lineno}: '{field}' must be a non-empty string")
-        questions.append(
-            Question(record["query"], Path(record["source"]), record["evidence"])
-        )
+        questions.append(Question(record["query"], Path(record["source"]), record["evidence"]))
     return questions
 
 
@@ -135,8 +133,7 @@ def main() -> None:
                     "source": str(q.source),
                     "rank": rank,
                     "retrieved": [
-                        {"source": str(r.source), "score": r.score, "text": r.text}
-                        for r in results
+                        {"source": str(r.source), "score": r.score, "text": r.text} for r in results
                     ],
                 }
                 for q, rank, results in zip(questions, ranks, retrieved, strict=True)
