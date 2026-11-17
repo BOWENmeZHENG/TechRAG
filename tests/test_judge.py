@@ -8,6 +8,7 @@ from techrag.judge import (
     ABSTAIN,
     Verdict,
     build_messages,
+    is_prohibition,
     judge,
     make_probes,
     parse_verdict,
@@ -37,9 +38,30 @@ def test_verdict_scores():
     assert Verdict((True, False), "", "").score == 0.5
 
 
+def test_prohibitions_count_toward_correctness_not_completeness():
+    # facts: two statements, then two prohibitions; the answer states one and breaks one ban
+    verdict = Verdict((True, False, True, False), "", "", (False, False, True, True))
+    assert verdict.completeness == 0.5
+    assert verdict.violated and verdict.incorrect
+    assert verdict.score == 0.0
+
+    kept = Verdict((True, False, True, True), "", "", (False, False, True, True))
+    assert kept.completeness == 0.5 and not kept.incorrect and kept.score == 0.5
+
+    # an answer that says nothing keeps every ban but states nothing, so it scores zero
+    silent = Verdict((False, False, True, True), "", "", (False, False, True, True))
+    assert silent.score == 0.0
+
+
+def test_is_prohibition():
+    assert is_prohibition("The answer must not claim the target is 20%.")
+    assert not is_prohibition("The answer must state that the target is 30%.")
+    assert not is_prohibition("The target is 30%.")
+
+
 def test_parse_verdict():
-    verdict = parse_verdict(_reply([True, False], contradiction="says 20%"), 2)
-    assert verdict == Verdict((True, False), "says 20%", "because")
+    verdict = parse_verdict(_reply([True, False], contradiction="says 20%"), (False, False))
+    assert verdict == Verdict((True, False), "says 20%", "because", (False, False))
     assert verdict.incorrect
 
 
@@ -56,18 +78,18 @@ def test_parse_verdict():
 )
 def test_parse_verdict_rejects_bad_replies(raw: str):
     with pytest.raises(ValueError):
-        parse_verdict(raw, 2)
+        parse_verdict(raw, (False, False))
 
 
 def test_build_messages_includes_question_reference_facts_and_answer():
-    q = _question("q1", ("fact one", "fact two"))
+    q = _question("q1", ("fact one", "The answer must not say X."))
     system, user = build_messages(q, "my answer")
     assert system["role"] == "system" and user["role"] == "user"
     for text in (
         "question q1?",
         "gold q1",
-        "1. fact one",
-        "2. fact two",
+        "1. [STATE] fact one",
+        "2. [FORBIDDEN] The answer must not say X.",
         "my answer",
         "2 required",
     ):
@@ -76,11 +98,20 @@ def test_build_messages_includes_question_reference_facts_and_answer():
 
 def test_judge_grades_with_chat_reply():
     q = _question("q1", ("a", "b"))
-    assert judge(q, "ans", lambda messages: _reply([True, False])).completeness == 0.5
+    seen = []
+
+    def chat(messages, schema):
+        seen.append(schema)
+        return _reply([True, False])
+
+    assert judge(q, "ans", chat).completeness == 0.5
+    # the schema pins the number of fact entries, so the model cannot skip or add one
+    assert seen[0]["properties"]["facts"]["minItems"] == 2
+    assert seen[0]["properties"]["facts"]["maxItems"] == 2
 
 
 def test_judge_skips_the_model_for_a_blank_answer():
-    def chat(messages):
+    def chat(messages, schema):
         raise AssertionError("must not be called")
 
     verdict = judge(_question("q1", ("a", "b")), "  \n", chat)
@@ -90,11 +121,11 @@ def test_judge_skips_the_model_for_a_blank_answer():
 def test_judge_retries_unusable_replies_then_raises():
     q = _question("q1", ("a",))
     replies = iter(["garbage", _reply([True])])
-    assert judge(q, "ans", lambda m: next(replies)).facts_met == (True,)
+    assert judge(q, "ans", lambda m, s: next(replies)).facts_met == (True,)
 
     calls = []
 
-    def always_bad(messages):
+    def always_bad(messages, schema):
         calls.append(1)
         return "garbage"
 
@@ -105,7 +136,7 @@ def test_judge_retries_unusable_replies_then_raises():
 
 def test_judge_rejects_question_without_facts():
     with pytest.raises(ValueError, match="no answer facts"):
-        judge(_question("q1", ()), "ans", lambda m: _reply([]))
+        judge(_question("q1", ()), "ans", lambda m, s: _reply([]))
 
 
 def test_make_probes_kinds_and_expected_scores():
@@ -128,26 +159,53 @@ def test_make_probes_kinds_and_expected_scores():
     assert probes[("n", "mismatch")][1] == 0.0
 
 
-def test_make_probes_expect_prohibitions_to_be_met_by_any_answer():
+def test_make_probes_ignore_prohibitions_when_halving_facts():
     q = _question("p", ("s1", "s2", "The answer must not say X.", "The answer must not say Y."))
     probes = {kind: (answer, expected) for _, kind, answer, expected in make_probes([q, q])[:3]}
-    assert probes["abstain"][1] == 0.5  # the two prohibitions
-    assert probes["partial"] == ("s1", 0.75)  # one of two statements, plus the prohibitions
+    assert probes["abstain"][1] == 0.0  # silence earns nothing from the prohibitions
+    assert probes["partial"] == ("s1", 0.5)  # one of the two statements
+
+
+def test_judge_treats_a_broken_prohibition_as_incorrect():
+    q = _question("q1", ("s1", "The answer must not say X."))
+    assert judge(q, "ans", lambda m, s: _reply([True, True])).score == 1.0
+    broken = judge(q, "ans", lambda m, s: _reply([True, False]))
+    assert broken.completeness == 1.0 and broken.violated and broken.score == 0.0
+
+
+def test_judge_gives_a_blank_answer_no_credit_for_prohibitions():
+    q = _question("q1", ("s1", "The answer must not say X."))
+    verdict = judge(q, "", lambda m, s: _reply([True, True]))
+    assert verdict.completeness == 0.0 and not verdict.violated and verdict.score == 0.0
+
+
+def test_selftest_records_unusable_verdicts_and_keeps_going():
+    questions = [_question(f"q{i}", ("x", "y")) for i in range(3)]
+    calls = []
+
+    def flaky(messages, schema):
+        calls.append(1)
+        return "garbage" if len(calls) <= 2 else _reply([True, True])  # first probe fails twice
+
+    probes, failures = selftest(questions, flaky, n=3, seed=0)
+    assert len(failures) == 1 and "Judge reply is not a verdict" in failures[0]
+    assert len(probes) == len(make_probes(questions)) - 1
 
 
 def test_selftest_and_summary_with_a_perfect_judge():
     questions = [_question(f"q{i}", ("x", "y")) for i in range(4)]
 
-    def perfect(messages):
+    def perfect(messages, schema):
         user = messages[1]["content"]
-        answer = user.split("Candidate answer:\n")[1].split("\n\nFor each")[0]
+        answer = user.split("Candidate answer:\n")[1].split("\n\nEach required fact")[0]
         if answer == "x":  # the "partial" probe: only the first fact
             return _reply([True, False])
         if answer.startswith("gold q") and f"Reference answer: {answer}" in user:
             return _reply([True, True])
         return _reply([False, False])
 
-    probes = selftest(questions, perfect, n=4, seed=1)
+    probes, failures = selftest(questions, perfect, n=4, seed=1)
+    assert failures == []
     summary = summarize_probes(probes)
     assert set(summary) == {"abstain", "mismatch", "partial", "reference"}
     assert all(s["mean_abs_error"] == 0 and s["within_0.25"] == 1 for s in summary.values())

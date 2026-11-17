@@ -79,13 +79,18 @@ def test_ollama_chat_passes_format_think_and_temperature(
     schema = {"type": "object"}
 
     ollama_chat(
-        [{"role": "user", "content": "hi"}], "m", format=schema, think=False, temperature=0.0
+        [{"role": "user", "content": "hi"}],
+        "m",
+        format=schema,
+        think=False,
+        temperature=0.0,
+        num_ctx=8192,
     )
 
     body = json.loads(requests[0].data)
     assert body["format"] == schema
     assert body["think"] is False  # False must be sent, not treated as unset
-    assert body["options"] == {"temperature": 0.0}
+    assert body["options"] == {"temperature": 0.0, "num_ctx": 8192}
 
 
 def test_ollama_chat_unexpected_response_raises_value_error(

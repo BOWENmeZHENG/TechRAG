@@ -54,12 +54,14 @@ def ollama_chat(
     format: dict | None = None,
     think: bool | None = None,
     temperature: float | None = None,
+    num_ctx: int | None = None,
 ) -> str:
     """Send ``messages`` to the Ollama server at ``host`` and return the model's reply.
 
     ``format`` is a JSON schema the reply must conform to, ``think`` turns a reasoning model's
-    thinking on or off, and ``temperature`` overrides the model's sampling temperature. Each is
-    left to the server's default when ``None``.
+    thinking on or off, ``temperature`` overrides the model's sampling temperature and ``num_ctx``
+    its context window in tokens (prompt and reply together; a reply is cut short when they do
+    not fit). Each is left to the server's default when ``None``.
 
     Raises:
         OSError: If the server cannot be reached (including a connection refused because
@@ -72,8 +74,13 @@ def ollama_chat(
         body["format"] = format
     if think is not None:
         body["think"] = think
-    if temperature is not None:
-        body["options"] = {"temperature": temperature}
+    options = {
+        name: value
+        for name, value in (("temperature", temperature), ("num_ctx", num_ctx))
+        if value is not None
+    }
+    if options:
+        body["options"] = options
     request_body = json.dumps(body)
     request = urllib.request.Request(
         f"{host.rstrip('/')}/api/chat",

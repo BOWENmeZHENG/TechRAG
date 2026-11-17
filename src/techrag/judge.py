@@ -5,10 +5,14 @@ unanswerable question types the facts are rubrics ("must state that the query is
 answerable"), so one method grades every type: the judge decides, fact by fact, whether the
 answer meets it.
 
-* **completeness** is the fraction of facts met;
-* **correctness** is 1 unless the answer asserts something that contradicts the reference
-  answer, in which case it is 0;
+* **completeness** is the fraction of the facts that state something which the answer meets;
+* **correctness** is 1 unless the answer contradicts the reference answer or makes a claim that
+  a fact forbids ("The answer must not ..."), in which case it is 0;
 * the **score** is their product.
+
+Forbidding facts feed correctness only. Counting them toward completeness would give an answer
+that says nothing credit for every "must not", so a refusal would score well on questions that
+have many of them.
 
 Because a judge can be wrong in ways that quietly distort every later number, :func:`selftest`
 probes it with answers whose right score is known (the reference answer, a refusal, half of
@@ -28,6 +32,9 @@ from techrag.bench import SUBSET_DIR, BenchQuestion, read_questions
 from techrag.generate import OLLAMA_URL, ollama_chat
 
 JUDGE_MODEL = "qwen3.5:9b"
+# Room for the prompt and a verdict with one entry per fact: the longest question has 46 facts,
+# which needs about 8k tokens, and Ollama's default window of 4096 cuts the reply off mid-JSON.
+NUM_CTX = 16384
 SELFTEST_PATH = Path("eval/judge_selftest.json")
 ABSTAIN = "I cannot answer this question from the available documentation."
 INFO_NOT_FOUND = "info_not_found"
@@ -40,32 +47,43 @@ SYSTEM_PROMPT = (
 )
 
 INSTRUCTIONS = (
-    "For each required fact, in order, quote the part of the candidate answer that bears on it "
-    "(empty if none) and decide whether the fact is met. A fact is met only if the candidate "
-    "states it, in any wording, and does not contradict it. Facts phrased as requirements "
-    '("must state ...", "must not claim ...") are met only if the candidate satisfies them.\n'
+    "Each required fact is labelled STATE or FORBIDDEN.\n"
+    "- STATE: the candidate has to say it. `met` is true only if the candidate states the fact, "
+    "in any wording. If the candidate leaves it out, or refuses to answer, `met` is false.\n"
+    "- FORBIDDEN: the candidate must not say it. `met` is true if the candidate does not make "
+    "the claim, and false only if the candidate asserts it.\n"
+    "For each fact, in order, quote the part of the candidate answer that bears on it (at most "
+    "15 words, empty if none), then give `met`.\n"
     "Then fill in `contradiction`: if the candidate states something that is inconsistent with "
     "the reference answer, quote that statement; otherwise leave it empty. A candidate that "
     "merely leaves information out, or adds detail that does not conflict with the reference, "
     "has no contradiction. Finish with a one-sentence `reason`."
 )
 
-VERDICT_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "facts": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {"evidence": {"type": "string"}, "met": {"type": "boolean"}},
-                "required": ["evidence", "met"],
+# Takes the chat messages and the JSON schema the reply must follow; returns the raw reply.
+Chat = Callable[[Sequence[dict[str, str]], dict], str]
+
+
+def verdict_schema(n_facts: int) -> dict:
+    """Return the JSON schema of a verdict on ``n_facts`` facts, with exactly one entry for each."""
+    return {
+        "type": "object",
+        "properties": {
+            "facts": {
+                "type": "array",
+                "minItems": n_facts,
+                "maxItems": n_facts,
+                "items": {
+                    "type": "object",
+                    "properties": {"evidence": {"type": "string"}, "met": {"type": "boolean"}},
+                    "required": ["evidence", "met"],
+                },
             },
+            "contradiction": {"type": "string"},
+            "reason": {"type": "string"},
         },
-        "contradiction": {"type": "string"},
-        "reason": {"type": "string"},
-    },
-    "required": ["facts", "contradiction", "reason"],
-}
+        "required": ["facts", "contradiction", "reason"],
+    }
 
 
 @dataclass(frozen=True)
@@ -73,26 +91,44 @@ class Verdict:
     """The judge's grading of one answer.
 
     ``contradiction`` is the statement in the answer that conflicts with the reference answer,
-    empty if there is none.
+    empty if there is none. ``prohibitions`` marks the facts that forbid a claim instead of
+    stating one (see :func:`is_prohibition`); for those, ``facts_met`` is true unless the answer
+    makes the forbidden claim. It defaults to no prohibitions.
     """
 
     facts_met: tuple[bool, ...]
     contradiction: str
     reason: str
+    prohibitions: tuple[bool, ...] = ()
+
+    @property
+    def _statements_met(self) -> list[bool]:
+        mask = self.prohibitions or (False,) * len(self.facts_met)
+        return [m for m, forbids in zip(self.facts_met, mask, strict=True) if not forbids]
+
+    @property
+    def violated(self) -> bool:
+        """Return whether the answer makes a claim that a fact forbids."""
+        mask = self.prohibitions or (False,) * len(self.facts_met)
+        return any(forbids and not m for m, forbids in zip(self.facts_met, mask, strict=True))
 
     @property
     def incorrect(self) -> bool:
-        """Return whether the answer contradicts the reference answer."""
-        return bool(self.contradiction.strip())
+        """Return whether the answer contradicts the reference answer or makes a forbidden claim."""
+        return bool(self.contradiction.strip()) or self.violated
 
     @property
     def completeness(self) -> float:
-        """Return the fraction of the required facts the answer meets."""
-        return sum(self.facts_met) / len(self.facts_met)
+        """Return the fraction of the facts that state something which the answer meets.
+
+        A question whose facts all forbid claims has nothing to be complete about, so it is 1.
+        """
+        statements = self._statements_met
+        return sum(statements) / len(statements) if statements else 1.0
 
     @property
     def correctness(self) -> float:
-        """Return 0 if the answer contradicts the reference answer, else 1."""
+        """Return 0 if the answer contradicts the reference or makes a forbidden claim, else 1."""
         return 0.0 if self.incorrect else 1.0
 
     @property
@@ -103,7 +139,10 @@ class Verdict:
 
 def build_messages(question: BenchQuestion, answer: str) -> list[dict[str, str]]:
     """Return the chat messages asking the judge to grade ``answer`` to ``question``."""
-    facts = "\n".join(f"{i}. {f}" for i, f in enumerate(question.answer_facts, start=1))
+    facts = "\n".join(
+        f"{i}. [{'FORBIDDEN' if is_prohibition(f) else 'STATE'}] {f}"
+        for i, f in enumerate(question.answer_facts, start=1)
+    )
     user = (
         f"Question: {question.text}\n\n"
         f"Reference answer: {question.gold_answer}\n\n"
@@ -115,12 +154,18 @@ def build_messages(question: BenchQuestion, answer: str) -> list[dict[str, str]]
     return [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}]
 
 
-def parse_verdict(raw: str, n_facts: int) -> Verdict:
+def is_prohibition(fact: str) -> bool:
+    """Return whether ``fact`` forbids a claim ("The answer must not ...") instead of making one."""
+    return fact.lower().startswith("the answer must not")
+
+
+def parse_verdict(raw: str, prohibitions: Sequence[bool]) -> Verdict:
     """Parse the judge's JSON reply into a :class:`Verdict`.
 
+    ``prohibitions`` has one entry per fact, saying whether that fact forbids a claim.
+
     Raises:
-        ValueError: If ``raw`` is not JSON of the expected shape or has no entry for each of the
-            ``n_facts`` facts.
+        ValueError: If ``raw`` is not JSON of the expected shape or has no entry for each fact.
     """
     try:
         data = json.loads(raw)
@@ -130,56 +175,55 @@ def parse_verdict(raw: str, n_facts: int) -> Verdict:
         reason = data.get("reason", "")
     except (json.JSONDecodeError, KeyError, TypeError) as e:
         raise ValueError(f"Judge reply is not a verdict: {e!r}: {raw[:200]!r}") from e
-    if len(met) != n_facts:
-        raise ValueError(f"Judge graded {len(met)} facts, expected {n_facts}")
+    if len(met) != len(prohibitions):
+        raise ValueError(f"Judge graded {len(met)} facts, expected {len(prohibitions)}")
     if not all(isinstance(m, bool) for m in met) or not isinstance(contradiction, str):
         raise ValueError(f"Judge verdict has fields of the wrong type: {raw[:200]!r}")
-    return Verdict(met, contradiction, str(reason))
+    return Verdict(met, contradiction, str(reason), tuple(prohibitions))
 
 
 def judge(
     question: BenchQuestion,
     answer: str,
-    chat: Callable[[Sequence[dict[str, str]]], str],
+    chat: Chat,
     retries: int = 1,
 ) -> Verdict:
     """Grade ``answer`` to ``question`` with the judge model behind ``chat``.
 
-    ``chat`` takes the chat messages and returns the judge's raw reply, which must follow
-    :data:`VERDICT_SCHEMA`. A blank answer meets nothing and is graded without calling it. An
-    unusable reply is retried up to ``retries`` times.
+    ``chat`` takes the chat messages and :func:`verdict_schema` for the question, and returns the
+    judge's raw reply. A blank answer meets nothing and is graded without calling it. An unusable
+    reply is retried up to ``retries`` times.
 
     Raises:
         ValueError: If ``question`` has no answer facts, or the judge never gives a usable verdict.
         OSError: If ``chat`` fails.
     """
-    n = len(question.answer_facts)
-    if n == 0:
+    if not question.answer_facts:
         raise ValueError(f"Question {question.id} has no answer facts to grade against")
-    if not answer.strip():
-        return Verdict((False,) * n, "", "empty answer")
+    prohibitions = tuple(is_prohibition(f) for f in question.answer_facts)
+    if not answer.strip():  # says nothing, so it makes no forbidden claim
+        return Verdict(prohibitions, "", "empty answer", prohibitions)
     messages = build_messages(question, answer)
+    schema = verdict_schema(len(prohibitions))
     for attempt in range(retries + 1):
         try:
-            return parse_verdict(chat(messages), n)
+            return parse_verdict(chat(messages, schema), prohibitions)
         except ValueError:
             if attempt == retries:
                 raise
     raise AssertionError("unreachable")
 
 
-def ollama_judge(
-    model: str = JUDGE_MODEL, host: str = OLLAMA_URL, think: bool = False
-) -> Callable[[Sequence[dict[str, str]]], str]:
+def ollama_judge(model: str = JUDGE_MODEL, host: str = OLLAMA_URL, think: bool = False) -> Chat:
     """Return a ``chat`` function that asks the Ollama ``model`` for a schema-conforming verdict.
 
     Sampling is greedy (temperature 0) so grading is repeatable. Reasoning is off by default,
     since the verdict already carries per-fact evidence and thinking is slow.
     """
 
-    def chat(messages: Sequence[dict[str, str]]) -> str:
+    def chat(messages: Sequence[dict[str, str]], schema: dict) -> str:
         return ollama_chat(
-            messages, model, host, format=VERDICT_SCHEMA, think=think, temperature=0.0
+            messages, model, host, format=schema, think=think, temperature=0.0, num_ctx=NUM_CTX
         )
 
     return chat
@@ -201,39 +245,27 @@ class Probe:
         return abs(self.verdict.score - self.expected)
 
 
-def _is_prohibition(fact: str) -> bool:
-    """Return whether ``fact`` forbids a claim ("The answer must not ...") instead of making one."""
-    return fact.lower().startswith("the answer must not")
-
-
 def make_probes(questions: Sequence[BenchQuestion]) -> list[tuple[BenchQuestion, str, str, float]]:
     """Return ``(question, kind, answer, expected score)`` probes built from ``questions``.
 
-    Some facts forbid a claim ("The answer must not ..."), and any answer that does not make that
-    claim meets them, so every probe except ``reference`` is expected to meet the prohibitions
-    and nothing more.
-
     * ``reference``: the reference answer, expected 1 (not for ``info_not_found``, whose
       reference answer is itself a rubric);
-    * ``abstain``: a refusal, expected 1 for ``info_not_found`` questions;
+    * ``abstain``: a refusal, expected 1 for ``info_not_found`` questions and 0 otherwise;
     * ``partial``: the first half of the facts that state something (for questions with at least
-      two), expected to meet exactly those;
-    * ``mismatch``: the reference answer of the next answerable question.
+      two), expected to score that share, since it states nothing forbidden;
+    * ``mismatch``: the reference answer of the next answerable question, expected 0.
     """
     answerable = [q for q in questions if q.type != INFO_NOT_FOUND]
     probes = []
     for i, q in enumerate(questions):
         unanswerable = q.type == INFO_NOT_FOUND
-        n = len(q.answer_facts)
-        prohibitions = sum(_is_prohibition(f) for f in q.answer_facts)
-        floor = prohibitions / n
-        probes.append((q, "abstain", ABSTAIN, 1.0 if unanswerable else floor))
+        probes.append((q, "abstain", ABSTAIN, 1.0 if unanswerable else 0.0))
         if not unanswerable:
             probes.append((q, "reference", q.gold_answer, 1.0))
-            statements = [f for f in q.answer_facts if not _is_prohibition(f)]
+            statements = [f for f in q.answer_facts if not is_prohibition(f)]
             if len(statements) >= 2:
                 head = statements[: len(statements) // 2]
-                probes.append((q, "partial", " ".join(head), (len(head) + prohibitions) / n))
+                probes.append((q, "partial", " ".join(head), len(head) / len(statements)))
         # The nearest answerable question after this one (wrapping round) other than itself.
         other = next(
             (
@@ -244,23 +276,33 @@ def make_probes(questions: Sequence[BenchQuestion]) -> list[tuple[BenchQuestion,
             None,
         )
         if other is not None:
-            probes.append((q, "mismatch", other.gold_answer, 0.0 if unanswerable else floor))
+            probes.append((q, "mismatch", other.gold_answer, 0.0))
     return probes
 
 
 def selftest(
     questions: Sequence[BenchQuestion],
-    chat: Callable[[Sequence[dict[str, str]]], str],
+    chat: Chat,
     n: int = 20,
     seed: int = 0,
-) -> list[Probe]:
-    """Grade the probes built from ``n`` questions sampled (seeded) from those with facts."""
+) -> tuple[list[Probe], list[str]]:
+    """Grade the probes built from ``n`` questions sampled (seeded) from those with facts.
+
+    Returns the graded probes and a description of each probe the judge never gave a usable
+    verdict for, so one bad reply does not lose the rest of a long run.
+
+    Raises:
+        OSError: If ``chat`` fails.
+    """
     pool = [q for q in questions if q.answer_facts]
     sample = random.Random(seed).sample(pool, min(n, len(pool)))
-    return [
-        Probe(q.id, kind, answer, expected, judge(q, answer, chat))
-        for q, kind, answer, expected in make_probes(sample)
-    ]
+    probes, failures = [], []
+    for q, kind, answer, expected in make_probes(sample):
+        try:
+            probes.append(Probe(q.id, kind, answer, expected, judge(q, answer, chat)))
+        except ValueError as e:
+            failures.append(f"{q.id} {kind}: {e}")
+    return probes, failures
 
 
 def summarize_probes(probes: Sequence[Probe]) -> dict[str, dict[str, float]]:
@@ -295,13 +337,14 @@ def main() -> None:
     try:
         questions = read_questions(args.subset / "questions.jsonl")
         chat = ollama_judge(args.model, args.ollama_url, args.think)
-        probes = selftest(questions, chat, args.n, args.seed)
+        probes, failures = selftest(questions, chat, args.n, args.seed)
         summary = summarize_probes(probes)
         report = {
             "model": args.model,
             "think": args.think,
             "seed": args.seed,
             "summary": summary,
+            "failures": failures,
             "probes": [
                 {
                     "question_id": p.question_id,
@@ -329,8 +372,12 @@ def main() -> None:
             f"{kind:<12}{s['n']:>4}{s['expected']:>10.2f}{s['observed']:>10.2f}"
             f"{s['mean_abs_error']:>11.2f}{s['within_0.25']:>12.2f}"
         )
+    if failures:
+        print(f"\n{len(failures)} probes got no usable verdict and were left out:")
+        for failure in failures:
+            print(f"  {failure}")
     bad = [p for p in probes if p.error > 0.25]
-    print(f"\n{len(bad)} of {len(probes)} probes off by more than 0.25")
+    print(f"\n{len(bad)} of {len(probes)} graded probes off by more than 0.25")
     for p in bad:
         print(
             f"  {p.question_id} {p.kind}: expected {p.expected:.2f}, got {p.verdict.score:.2f}"
