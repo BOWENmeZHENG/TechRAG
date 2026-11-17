@@ -79,9 +79,7 @@ def test_ollama_chat_unexpected_response_raises_value_error(
         ollama_chat([{"role": "user", "content": "hi"}])
 
 
-def test_answer_chats(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_answer_chats(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
     calls = []
 
@@ -138,9 +136,7 @@ def test_main_prints_answer_and_numbered_sources(
 
 
 @pytest.mark.parametrize("error", [OSError("connection refused"), ValueError("bad index")])
-def test_main_exits_with_error_message(
-    monkeypatch: pytest.MonkeyPatch, error: Exception
-) -> None:
+def test_main_exits_with_error_message(monkeypatch: pytest.MonkeyPatch, error: Exception) -> None:
     def fake_answer(*args):
         raise error
 

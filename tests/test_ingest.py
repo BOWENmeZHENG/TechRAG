@@ -176,9 +176,7 @@ def test_embed_and_store_replaces_existing_index(tmp_path: Path, fake_model) -> 
     ]
 
 
-def test_embed_and_store_empty_chunks_raises_and_writes_nothing(
-    tmp_path: Path, fake_model
-) -> None:
+def test_embed_and_store_empty_chunks_raises_and_writes_nothing(tmp_path: Path, fake_model) -> None:
     index_dir = tmp_path / ".index"
 
     with pytest.raises(ValueError, match="No chunks"):

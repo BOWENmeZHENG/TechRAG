@@ -7,7 +7,7 @@ FAISS index that you can search with natural-language queries. The best-matching
 be passed to a local [Ollama](https://ollama.com) model to generate a cited answer. The repo
 includes a set of labelled questions for measuring retrieval quality.
 
-The sample corpus is a handful of PyTorch notes in [data/pytorch/](data/pytorch/).
+The sample corpus is a handful of PyTorch notes in [data/quicktest/pytorch/](data/quicktest/pytorch/).
 
 ## Setup
 
@@ -25,7 +25,7 @@ uv sync
 uv run techrag-ingest [data_dir]
 ```
 
-Reads every `*.md` file under `data_dir` (default `data`), chunks it, embeds the chunks, and
+Reads every `*.md` file under `data_dir` (default `data/quicktest`), chunks it, embeds the chunks, and
 writes the index to `.index/` (git-ignored). The embedding model is downloaded on first use.
 
 | Option | Default | Description |
@@ -161,7 +161,7 @@ replies unexpectedly, `/ask` returns `502`.
 
 Docker is for running the API, not for development. Build the index, search, ask and
 evaluate locally with `uv run ...` as above. The image runs `techrag-ingest` once at build
-time and does not include `eval/`, so to pick up changes to `data/` or the code you rebuild
+time and does not include `eval/`, so to pick up changes to `data/quicktest/` or the code you rebuild
 the image rather than re-ingesting inside a container.
 
 ```sh
@@ -173,9 +173,9 @@ Builds the API image and the web UI image and starts them alongside an Ollama co
 web UI is on `http://localhost:8080` (nginx serves the built React app from [web/](web/) and
 forwards `/api/*` to the API), and the API is on `http://localhost:8000` (see
 [Serve](#5-serve) for the endpoints). The image runs
-`techrag-ingest` on [data/](data/) at build time, so the index and the embedding model are
+`techrag-ingest` on [data/quicktest/](data/quicktest/) at build time, so the index and the embedding model are
 baked in and the container needs no network access to the Hugging Face Hub at runtime.
-Rebuild (`docker compose up --build`) after changing the docs in `data/`.
+Rebuild (`docker compose up --build`) after changing the docs in `data/quicktest/`.
 
 - `/ask` needs the Ollama model to be pulled into the `ollama` service, as above. It is stored
   in the `ollama` volume, so this is only needed once. `/search` and `/healthz` work without it.
@@ -205,7 +205,8 @@ uv run ruff check    # lint
 ## Layout
 
 ```
-data/              Markdown documentation to index
+data/quicktest/    Small sample corpus to index (committed)
+data/external/     Downloaded datasets, e.g. EnterpriseRAG-Bench (git-ignored)
 eval/              Labelled questions (and generated results)
 src/techrag/
   ingest.py        Load, chunk, embed, and store documents

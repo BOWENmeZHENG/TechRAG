@@ -125,9 +125,7 @@ def main() -> None:
         return ollama_chat(messages, args.llm, args.ollama_url)
 
     try:
-        result = answer(
-            args.query, args.k, chat, args.index_dir, args.embedding_model, args.mode
-        )
+        result = answer(args.query, args.k, chat, args.index_dir, args.embedding_model, args.mode)
     except (OSError, ValueError) as e:
         sys.exit(f"error: {e}")
     print(result.text)

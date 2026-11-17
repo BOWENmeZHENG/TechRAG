@@ -13,6 +13,7 @@ dependencies = [
     "faiss-cpu>=1.15.1",
     "fastapi>=0.148.0",
     "langchain-text-splitters>=1.1.2",
+    "pyarrow>=26.0.1",
     "sentence-transformers>=6.1.0",
     "torch>=2.14",
     "uvicorn>=0.54.0",
@@ -24,6 +25,8 @@ techrag-retrieve = "techrag.retrieve:main"
 techrag-eval = "techrag.evaluate:main"
 techrag-ask = "techrag.generate:main"
 techrag-serve = "techrag.api:main"
+techrag-subset = "techrag.bench:main"
+techrag-recall = "techrag.recall:main"
 
 [dependency-groups]
 dev = [
