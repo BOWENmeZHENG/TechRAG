@@ -47,9 +47,19 @@ def build_messages(query: str, results: Sequence[Result]) -> list[dict[str, str]
 
 
 def ollama_chat(
-    messages: Sequence[dict[str, str]], model: str = LLM_MODEL, host: str = OLLAMA_URL
+    messages: Sequence[dict[str, str]],
+    model: str = LLM_MODEL,
+    host: str = OLLAMA_URL,
+    *,
+    format: dict | None = None,
+    think: bool | None = None,
+    temperature: float | None = None,
 ) -> str:
     """Send ``messages`` to the Ollama server at ``host`` and return the model's reply.
+
+    ``format`` is a JSON schema the reply must conform to, ``think`` turns a reasoning model's
+    thinking on or off, and ``temperature`` overrides the model's sampling temperature. Each is
+    left to the server's default when ``None``.
 
     Raises:
         OSError: If the server cannot be reached (including a connection refused because
@@ -57,7 +67,14 @@ def ollama_chat(
         ValueError: If the server's response is not a chat reply, e.g. ``model`` is not
             pulled.
     """
-    request_body = json.dumps({"model": model, "messages": list(messages), "stream": False})
+    body: dict = {"model": model, "messages": list(messages), "stream": False}
+    if format is not None:
+        body["format"] = format
+    if think is not None:
+        body["think"] = think
+    if temperature is not None:
+        body["options"] = {"temperature": temperature}
+    request_body = json.dumps(body)
     request = urllib.request.Request(
         f"{host.rstrip('/')}/api/chat",
         data=request_body.encode("utf-8"),

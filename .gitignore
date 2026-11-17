@@ -224,6 +224,7 @@ __marimo__/
 # eval results
 results.json
 eval/recall*.json
+eval/judge*.json
 # downloaded datasets (e.g. from Hugging Face)
 data/external/*
 !data/external/.gitkeep

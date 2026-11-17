@@ -66,6 +66,28 @@ def test_ollama_chat_request_and_reply(
     }
 
 
+def test_ollama_chat_passes_format_think_and_temperature(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests = []
+
+    def urlopen(request, timeout=None):
+        requests.append(request)
+        return json_response({"message": {"role": "assistant", "content": "{}"}})
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    schema = {"type": "object"}
+
+    ollama_chat(
+        [{"role": "user", "content": "hi"}], "m", format=schema, think=False, temperature=0.0
+    )
+
+    body = json.loads(requests[0].data)
+    assert body["format"] == schema
+    assert body["think"] is False  # False must be sent, not treated as unset
+    assert body["options"] == {"temperature": 0.0}
+
+
 def test_ollama_chat_unexpected_response_raises_value_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
