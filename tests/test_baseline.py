@@ -10,6 +10,7 @@ from techrag.baseline import (
     gold_found,
     load_records,
     run,
+    run_each,
     run_question,
     summarize,
     summarize_by,
@@ -118,6 +119,24 @@ def test_record_json_round_trip():
     assert Record.from_json(record.to_json()) == Record(
         "q1", "basic", "ans", ("d1", "d2"), 0.5, 1.23, record.verdict
     )
+
+
+def test_record_json_round_trip_keeps_agent_fields_and_reads_older_records():
+    trace = ({"step": 1, "tool": "search", "args": {"query": "q"}, "docs": ["d1"]},)
+    record = Record(
+        "q1", "basic", "ans", ("d1",), 1.0, 2.0, None, "judge: x", 3, 900, "answered", trace
+    )
+    assert Record.from_json(record.to_json()) == record
+    old = json.loads(record.to_json())
+    for key in ("steps", "tokens", "stop", "trace"):
+        del old[key]
+    assert Record.from_json(json.dumps(old)).steps == 0
+
+
+def test_run_each_skips_graded_questions_only():
+    done = {"a": _record("a", True), "b": _record("b", None)}
+    new = run_each([_question("a"), _question("b")], lambda q: _record(q.id, True), done)
+    assert [r.question_id for r in new] == ["b"]
 
 
 def test_record_from_json_rejects_garbage():

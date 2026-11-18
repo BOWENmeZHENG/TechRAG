@@ -36,11 +36,15 @@ RETRIEVAL_GROUPS = ("all gold found", "some gold missing", "no gold documents")
 
 @dataclass(frozen=True)
 class Record:
-    """The baseline's outcome on one question.
+    """A system's outcome on one question.
 
-    ``sources`` are the document ids of the retrieved chunks, best first. ``gold_found`` is the
-    share of the question's gold documents among them, or ``None`` for a question that has none.
-    A question that could not be answered or graded has an ``error`` and no ``verdict``.
+    ``sources`` are the document ids the system saw, in the order it saw them. ``gold_found`` is
+    the share of the question's gold documents among them, or ``None`` for a question that has
+    none. A question that could not be answered or graded has an ``error`` and no ``verdict``.
+
+    The last four fields describe an agent run: how many model turns it took, the tokens it
+    processed (prompt and reply, summed over turns), why it stopped, and what it did, one entry
+    per tool call. The single-shot baseline leaves them empty.
     """
 
     question_id: str
@@ -51,6 +55,10 @@ class Record:
     answer_seconds: float
     verdict: Verdict | None = None
     error: str | None = None
+    steps: int = 0
+    tokens: int = 0
+    stop: str = ""
+    trace: tuple[dict, ...] = ()
 
     @property
     def score(self) -> float | None:
@@ -90,6 +98,10 @@ class Record:
                 "answer_seconds": round(self.answer_seconds, 2),
                 "verdict": verdict,
                 "error": self.error,
+                "steps": self.steps,
+                "tokens": self.tokens,
+                "stop": self.stop,
+                "trace": list(self.trace),
             },
             ensure_ascii=False,
         )
@@ -123,6 +135,10 @@ class Record:
                 d["answer_seconds"],
                 verdict,
                 d["error"],
+                d.get("steps", 0),
+                d.get("tokens", 0),
+                d.get("stop", ""),
+                tuple(d.get("trace", ())),
             )
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             raise ValueError(f"invalid baseline record: {e!r}: {line[:200]!r}") from e
@@ -156,6 +172,31 @@ def gold_found(question: BenchQuestion, results: Sequence[Result]) -> float | No
     return sum(r is not None for r in ranks.values()) / len(ranks)
 
 
+def grade(
+    question: BenchQuestion,
+    base: dict,
+    text: str,
+    seconds: float,
+    judge_chat: Chat,
+    **extra,
+) -> Record:
+    """Grade the answer ``text`` to ``question`` and return it as a :class:`Record`.
+
+    ``base`` holds the record's ``question_id``, ``question_type``, ``sources`` and
+    ``gold_found``; ``extra`` any of its other fields. A judge that never gives a usable verdict,
+    or a request that times out, becomes an ``error`` on the record so that one bad question does
+    not end a long run.
+
+    Raises:
+        OSError: If the judge's server cannot be reached.
+    """
+    try:
+        verdict = judge(question, text, judge_chat)
+    except (TimeoutError, ValueError) as e:
+        return Record(**base, answer=text, answer_seconds=seconds, error=f"judge: {e}", **extra)
+    return Record(**base, answer=text, answer_seconds=seconds, verdict=verdict, **extra)
+
+
 def run_question(
     question: BenchQuestion,
     retrieve: Callable[[str, int], Sequence[Result]],
@@ -165,8 +206,7 @@ def run_question(
 ) -> Record:
     """Answer ``question`` from the top ``k`` chunks and grade the answer.
 
-    A judge that never gives a usable verdict, or a request that times out, becomes an ``error``
-    on the record so that one bad question does not end a long run.
+    An answer request that times out becomes an ``error`` on the record (see :func:`grade`).
 
     Raises:
         OSError: If a model server cannot be reached.
@@ -185,12 +225,31 @@ def run_question(
         return Record(
             **base, answer="", answer_seconds=time.monotonic() - start, error=f"answer: {e}"
         )
-    seconds = time.monotonic() - start
-    try:
-        verdict = judge(question, text, judge_chat)
-    except (TimeoutError, ValueError) as e:
-        return Record(**base, answer=text, answer_seconds=seconds, error=f"judge: {e}")
-    return Record(**base, answer=text, answer_seconds=seconds, verdict=verdict)
+    return grade(question, base, text, time.monotonic() - start, judge_chat)
+
+
+def run_each(
+    questions: Sequence[BenchQuestion],
+    one: Callable[[BenchQuestion], Record],
+    done: dict[str, Record],
+    on_record: Callable[[Record], None] = lambda r: None,
+) -> list[Record]:
+    """Call ``one`` on the questions not already graded in ``done``; return the new records.
+
+    ``on_record`` is called with each record as it finishes, e.g. to save it. A question in
+    ``done`` is redone if it had an error.
+
+    Raises:
+        OSError: If ``one`` does; records already passed to ``on_record`` are kept.
+    """
+    new = []
+    for q in questions:
+        if q.id in done and done[q.id].error is None:
+            continue
+        record = one(q)
+        on_record(record)
+        new.append(record)
+    return new
 
 
 def run(
@@ -204,21 +263,49 @@ def run(
 ) -> list[Record]:
     """Run :func:`run_question` on the questions not already graded in ``done``.
 
-    ``on_record`` is called with each new record as it finishes, e.g. to save it. Returns the new
-    records. A question in ``done`` is redone if it had an error.
+    See :func:`run_each`.
+    """
+    return run_each(
+        questions, lambda q: run_question(q, retrieve, answer_chat, judge_chat, k), done, on_record
+    )
+
+
+def run_logged(
+    questions: Sequence[BenchQuestion],
+    one: Callable[[BenchQuestion], Record],
+    output: Path,
+    fresh: bool = False,
+) -> list[Record]:
+    """Run ``one`` on the questions still to do, appending each record to ``output`` as it ends.
+
+    Progress goes to stderr. Returns the latest record of every question that has one, in the
+    order of ``questions``. ``fresh`` discards earlier results first.
 
     Raises:
-        OSError: If a model server cannot be reached; records already passed to ``on_record``
-            are kept.
+        OSError: If ``one`` does, or ``output`` cannot be written.
+        ValueError: If ``output`` holds an invalid record.
     """
-    new = []
-    for q in questions:
-        if q.id in done and done[q.id].error is None:
-            continue
-        record = run_question(q, retrieve, answer_chat, judge_chat, k)
-        on_record(record)
-        new.append(record)
-    return new
+    if fresh:
+        output.unlink(missing_ok=True)
+    done = load_records(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    todo = sum(q.id not in done or done[q.id].error is not None for q in questions)
+    print(f"{len(questions)} questions, {todo} to run", file=sys.stderr)
+
+    with output.open("a", encoding="utf-8") as f:
+
+        def save(record: Record) -> None:
+            f.write(record.to_json() + "\n")
+            f.flush()
+            outcome = record.error or f"score {record.score:.2f}"
+            detail = f" ({record.steps} steps, {record.stop})" if record.steps else ""
+            print(
+                f"  {record.question_id} {record.question_type}: {outcome}{detail}", file=sys.stderr
+            )
+
+        run_each(questions, one, done, save)
+    latest = load_records(output)
+    return [latest[q.id] for q in questions if q.id in latest]
 
 
 def _mean(values: Sequence[float]) -> float:
@@ -260,6 +347,14 @@ def format_table(overall: dict, by_group: dict[str, dict]) -> str:
     return "\n".join(lines)
 
 
+def print_report(records: Sequence[Record]) -> None:
+    """Print the scores of ``records`` by question type, then by how much gold retrieval found."""
+    overall = summarize(records)
+    print(format_table(overall, summarize_by(records, lambda r: r.question_type)))
+    print()
+    print(format_table(overall, summarize_by(records, lambda r: r.retrieval_group)))
+
+
 def main() -> None:
     """Entry point for the ``techrag-baseline`` command."""
     parser = argparse.ArgumentParser(description="Run the single-shot RAG baseline.")
@@ -288,42 +383,24 @@ def main() -> None:
         questions = read_questions(args.subset / "questions.jsonl")
         if args.n is not None:
             questions = random.Random(args.seed).sample(questions, min(args.n, len(questions)))
-        if args.fresh:
-            args.output.unlink(missing_ok=True)
-        done = load_records(args.output)
         retriever = Retriever(args.index_dir, args.embedding_model)
         retriever.warm_up()
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        todo = sum(q.id not in done or done[q.id].error is not None for q in questions)
-        print(f"{len(questions)} questions, {todo} to run", file=sys.stderr)
-
-        with args.output.open("a", encoding="utf-8") as f:
-
-            def save(record: Record) -> None:
-                f.write(record.to_json() + "\n")
-                f.flush()
-                outcome = record.error or f"score {record.score:.2f}"
-                print(f"  {record.question_id} {record.question_type}: {outcome}", file=sys.stderr)
-
-            run(
-                questions,
-                lambda q, k: retriever.search(q, k, args.mode),
+        judge_chat = ollama_judge(args.judge_model, args.ollama_url)
+        records = run_logged(
+            questions,
+            lambda q: run_question(
+                q,
+                lambda text, k: retriever.search(text, k, args.mode),
                 answer_chat,
-                ollama_judge(args.judge_model, args.ollama_url),
+                judge_chat,
                 args.k,
-                done,
-                save,
-            )
-        latest = load_records(args.output)
+            ),
+            args.output,
+            args.fresh,
+        )
     except (OSError, ValueError) as e:
         sys.exit(f"error: {e}")
-
-    records = [latest[q.id] for q in questions if q.id in latest]
-    print(format_table(summarize(records), summarize_by(records, lambda r: r.question_type)))
-    print()
-    print(
-        format_table(summarize(records), summarize_by(records, lambda r: r.retrieval_group)),
-    )
+    print_report(records)
 
 
 if __name__ == "__main__":
