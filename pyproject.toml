@@ -27,6 +27,7 @@ techrag-ask = "techrag.generate:main"
 techrag-serve = "techrag.api:main"
 techrag-subset = "techrag.bench:main"
 techrag-recall = "techrag.recall:main"
+techrag-judge = "techrag.judge:main"
 
 [dependency-groups]
 dev = [
