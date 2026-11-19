@@ -11,8 +11,8 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field, StringConstraints
 
-from techrag.core.generate import LLM_MODEL, OLLAMA_URL, answer_from, ollama_chat
-from techrag.core.ingest import EMBEDDING_MODEL, INDEX_DIR
+from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR, LLM_MODEL, OLLAMA_URL
+from techrag.core.generate import answer_from, ollama_chat
 from techrag.core.retrieve import Mode, Result, Retriever
 
 Query = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]

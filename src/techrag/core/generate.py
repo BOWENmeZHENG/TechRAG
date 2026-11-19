@@ -9,11 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
-from techrag.core.ingest import EMBEDDING_MODEL, INDEX_DIR
+from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR, LLM_MODEL, OLLAMA_URL
 from techrag.core.retrieve import Mode, Result, retrieve
-
-LLM_MODEL = "llama3.2:3b"
-OLLAMA_URL = "http://localhost:11434"
 
 SYSTEM_PROMPT = (
     "You answer questions about technical documentation using only the numbered context "

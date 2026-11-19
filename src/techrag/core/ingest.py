@@ -12,8 +12,7 @@ import numpy as np
 from langchain_text_splitters import Language, RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 
-EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
-INDEX_DIR = Path(".index")
+from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR
 
 
 @dataclass(frozen=True)

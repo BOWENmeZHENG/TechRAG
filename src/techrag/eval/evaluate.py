@@ -9,7 +9,7 @@ from functools import partial
 from pathlib import Path
 from typing import get_args
 
-from techrag.core.ingest import EMBEDDING_MODEL, INDEX_DIR
+from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR
 from techrag.core.retrieve import Mode, Result, retrieve
 from techrag.eval.metrics import hit_at_k, mean_reciprocal_rank
 

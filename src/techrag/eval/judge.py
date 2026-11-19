@@ -28,13 +28,10 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from techrag.benchmarks.bench import SUBSET_DIR, BenchQuestion, read_questions
-from techrag.core.generate import OLLAMA_URL, ollama_chat
+from techrag.benchmarks.bench import BenchQuestion, read_questions
+from techrag.common.config import JUDGE_MODEL, NUM_CTX, OLLAMA_URL, SUBSET_DIR
+from techrag.core.generate import ollama_chat
 
-JUDGE_MODEL = "qwen3.5:9b"
-# Room for the prompt and a verdict with one entry per fact: the longest question has 46 facts,
-# which needs about 8k tokens, and Ollama's default window of 4096 cuts the reply off mid-JSON.
-NUM_CTX = 16384
 SELFTEST_PATH = Path("eval/judge_selftest.json")
 ABSTAIN = "I cannot answer this question from the available documentation."
 INFO_NOT_FOUND = "info_not_found"

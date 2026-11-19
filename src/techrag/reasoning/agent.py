@@ -20,18 +20,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
-from techrag.benchmarks.bench import (
+from techrag.benchmarks.bench import BenchQuestion, doc_id_of, read_questions, sample_questions
+from techrag.common.config import (
+    DEV_INDEX_DIR,
+    EMBEDDING_MODEL,
+    JUDGE_MODEL,
+    NUM_CTX,
+    OLLAMA_URL,
     SUBSET_DIR,
-    BenchQuestion,
-    doc_id_of,
-    read_questions,
-    sample_questions,
 )
-from techrag.core.generate import OLLAMA_URL
-from techrag.core.ingest import EMBEDDING_MODEL
 from techrag.core.retrieve import Mode, Result, Retriever
-from techrag.eval.judge import JUDGE_MODEL, NUM_CTX, Chat, ollama_judge
-from techrag.eval.recall import INDEX_DIR
+from techrag.eval.judge import Chat, ollama_judge
 from techrag.reasoning.baseline import Record, grade, print_report, run_logged
 
 AGENT_MODEL = "qwen3.5:9b"
@@ -575,7 +574,7 @@ def main() -> None:
     """Entry point for the ``techrag-agent`` command."""
     parser = argparse.ArgumentParser(description="Run the agentic search loop on the benchmark.")
     parser.add_argument("--subset", type=Path, default=SUBSET_DIR, help="subset to search")
-    parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
+    parser.add_argument("--index-dir", type=Path, default=DEV_INDEX_DIR)
     parser.add_argument("--embedding-model", default=EMBEDDING_MODEL, help="must match ingest")
     parser.add_argument("--mode", choices=get_args(Mode), default="hybrid", help="ranking method")
     parser.add_argument("--llm", default=AGENT_MODEL, help="Ollama model that does the research")

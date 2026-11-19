@@ -367,7 +367,8 @@ data/external/     Downloaded datasets, e.g. EnterpriseRAG-Bench (git-ignored)
 eval/              Labelled questions (and generated results)
 src/techrag/
   api.py             FastAPI app serving search and ask
-  common/            Shared primitives (no RAG logic)
+  common/
+    config.py        Shared defaults: model names, index and subset paths, Ollama URL
   core/
     ingest.py        Load, chunk, embed, and store documents
     retrieve.py      Query the index (dense, BM25 or hybrid)

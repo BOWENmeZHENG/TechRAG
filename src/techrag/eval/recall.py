@@ -18,12 +18,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
-from techrag.benchmarks.bench import SUBSET_DIR, BenchQuestion, doc_id_of, read_questions
-from techrag.core.ingest import EMBEDDING_MODEL
+from techrag.benchmarks.bench import BenchQuestion, doc_id_of, read_questions
+from techrag.common.config import DEV_INDEX_DIR, EMBEDDING_MODEL, SUBSET_DIR
 from techrag.core.retrieve import Mode, Result, Retriever
 
 KS = (5, 10, 20, 50, 100)
-INDEX_DIR = Path(".index/dev")
 RESULTS_PATH = Path("eval/recall.json")
 
 
@@ -175,7 +174,7 @@ def main() -> None:
     """Entry point for the ``techrag-recall`` command."""
     parser = argparse.ArgumentParser(description="Measure document recall on benchmark questions.")
     parser.add_argument("--subset", type=Path, default=SUBSET_DIR, help="subset with questions")
-    parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
+    parser.add_argument("--index-dir", type=Path, default=DEV_INDEX_DIR)
     parser.add_argument("--model", default=EMBEDDING_MODEL, help="must match the ingest model")
     parser.add_argument("--mode", choices=get_args(Mode), default="dense", help="ranking method")
     parser.add_argument("--output", type=Path, default=RESULTS_PATH, help="JSON report to write")

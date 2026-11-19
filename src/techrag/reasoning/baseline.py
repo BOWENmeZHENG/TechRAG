@@ -19,18 +19,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
-from techrag.benchmarks.bench import (
+from techrag.benchmarks.bench import BenchQuestion, doc_id_of, read_questions, sample_questions
+from techrag.common.config import (
+    DEV_INDEX_DIR,
+    EMBEDDING_MODEL,
+    JUDGE_MODEL,
+    NUM_CTX,
+    OLLAMA_URL,
     SUBSET_DIR,
-    BenchQuestion,
-    doc_id_of,
-    read_questions,
-    sample_questions,
 )
-from techrag.core.generate import OLLAMA_URL, answer_from, ollama_chat
-from techrag.core.ingest import EMBEDDING_MODEL
+from techrag.core.generate import answer_from, ollama_chat
 from techrag.core.retrieve import Mode, Result, Retriever
-from techrag.eval.judge import JUDGE_MODEL, NUM_CTX, Chat, Verdict, judge, ollama_judge
-from techrag.eval.recall import INDEX_DIR, gold_doc_ranks
+from techrag.eval.judge import Chat, Verdict, judge, ollama_judge
+from techrag.eval.recall import gold_doc_ranks
 
 ANSWER_MODEL = "qwen3.5:9b"
 RESULTS_PATH = Path("eval/baseline.jsonl")
@@ -477,7 +478,7 @@ def main() -> None:
     """Entry point for the ``techrag-baseline`` command."""
     parser = argparse.ArgumentParser(description="Run the single-shot RAG baseline.")
     parser.add_argument("--subset", type=Path, default=SUBSET_DIR, help="subset with questions")
-    parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
+    parser.add_argument("--index-dir", type=Path, default=DEV_INDEX_DIR)
     parser.add_argument("--embedding-model", default=EMBEDDING_MODEL, help="must match ingest")
     parser.add_argument("--mode", choices=get_args(Mode), default="hybrid", help="ranking method")
     parser.add_argument("-k", type=int, default=10, help="chunks to give the model")

@@ -17,8 +17,9 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
+from techrag.common.config import SUBSET_DIR
+
 BENCH_DIR = Path("data/external/EnterpriseRAG-Bench")
-SUBSET_DIR = Path("data/subsets/dev")
 
 # Written next to the documents so a subset records how it was built.
 MANIFEST = "manifest.json"

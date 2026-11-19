@@ -10,8 +10,9 @@ from typing import Literal, get_args
 
 import faiss
 
+from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR
 from techrag.core.bm25 import BM25
-from techrag.core.ingest import EMBEDDING_MODEL, INDEX_DIR, _embed, _load_model
+from techrag.core.ingest import _embed, _load_model
 
 # BGE models are trained to match short queries against longer passages when the query
 # carries this instruction. Passages (see ingest) are embedded without it.
