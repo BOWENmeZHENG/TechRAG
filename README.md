@@ -126,10 +126,16 @@ uv run techrag-ingest data/subsets/dev
 
 ### Measure retrieval
 
-`techrag-recall` reports document-level recall: for each question, which
-of its gold documents show up in the top `k` chunks (`k` = 5, 10, 20, 50, 100), overall and per
-question type. Questions with no gold documents are skipped. Takes `--mode` (default `dense`);
-the report is written to `eval/recall.json`.
+`techrag-recall` reports document-level retrieval at `k` = 5, 10, 20, 50, 100 chunks, overall and
+per question type, with two metrics:
+
+- **recall** (`R@k`): the mean fraction of a question's gold documents found in the top `k` chunks.
+- **complete** (`all@k`): the share of questions whose gold documents were *all* found in the top
+  `k` chunks. This is stricter, and matters for questions that need several documents (e.g.
+  `completeness`), since a missing document means the answer can't be complete.
+
+Questions with no gold documents are skipped. Takes `--mode` (default `dense`); the report is
+written to `eval/recall.json`.
 
 ```sh
 uv run techrag-recall --mode hybrid
