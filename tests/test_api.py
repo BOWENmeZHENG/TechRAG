@@ -5,10 +5,10 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from techrag import ingest
 from techrag.api import create_app
-from techrag.ingest import Chunk, embed_and_store
-from techrag.retrieve import QUERY_PREFIX, Retriever
+from techrag.core import ingest
+from techrag.core.ingest import Chunk, embed_and_store
+from techrag.core.retrieve import QUERY_PREFIX, Retriever
 
 
 class FakeSentenceTransformer:

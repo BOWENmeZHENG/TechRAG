@@ -5,7 +5,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from techrag.bench import (
+from techrag.benchmarks.bench import (
     build_subset,
     doc_id_of,
     load_questions,

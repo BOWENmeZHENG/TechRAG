@@ -7,6 +7,7 @@ from collections.abc import Sequence
 
 
 def _check_ranks(ranks: Sequence[int | None]) -> None:
+    """Raise ``ValueError`` if ``ranks`` is empty or has a rank below 1."""
     if not ranks:
         raise ValueError("ranks must not be empty")
     if any(r is not None and r < 1 for r in ranks):
@@ -15,6 +16,13 @@ def _check_ranks(ranks: Sequence[int | None]) -> None:
 
 def hit_at_k(ranks: Sequence[int | None], k: int) -> float:
     """Return the fraction of queries whose first relevant result is within the top ``k``.
+
+    Args:
+        ranks: Per-query 1-based rank of the first relevant result, or ``None`` for a miss.
+        k: Cutoff rank. Must be positive.
+
+    Returns:
+        A value in ``[0, 1]``.
 
     Raises:
         ValueError: If ``ranks`` is empty or holds a rank below 1, or ``k`` is not positive.
@@ -27,6 +35,12 @@ def hit_at_k(ranks: Sequence[int | None], k: int) -> float:
 
 def mean_reciprocal_rank(ranks: Sequence[int | None]) -> float:
     """Return the mean of ``1 / rank`` over all queries, counting a miss as 0.
+
+    Args:
+        ranks: Per-query 1-based rank of the first relevant result, or ``None`` for a miss.
+
+    Returns:
+        A value in ``[0, 1]``.
 
     Raises:
         ValueError: If ``ranks`` is empty or holds a rank below 1.

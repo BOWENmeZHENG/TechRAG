@@ -117,7 +117,7 @@ uv run techrag-recall --mode hybrid
 
 ### Grade answers
 
-[judge.py](src/techrag/judge.py) scores an answer against the question's
+[judge.py](src/techrag/eval/judge.py) scores an answer against the question's
 `answer_facts` checklist with an LLM judge. `score = correctness x completeness`: completeness is
 the share of facts the answer states, and correctness drops to 0 if the answer contradicts the
 reference or makes a claim a fact forbids. Because a biased judge distorts every later number,
@@ -366,19 +366,25 @@ data/subsets/      Benchmark dev subset built by techrag-subset (git-ignored)
 data/external/     Downloaded datasets, e.g. EnterpriseRAG-Bench (git-ignored)
 eval/              Labelled questions (and generated results)
 src/techrag/
-  ingest.py        Load, chunk, embed, and store documents
-  retrieve.py      Query the index (dense, BM25 or hybrid)
-  bm25.py          BM25 keyword ranking
-  generate.py      Answer a question from retrieved chunks with Ollama
-  api.py           FastAPI app serving search and ask
-  evaluate.py      Run the eval questions
-  metrics.py       hit@k and MRR
-  bench.py         Load EnterpriseRAG-Bench, build the dev subset, sample questions
-  recall.py        Document-level retrieval recall on the benchmark questions
-  judge.py         LLM judge (correctness x completeness) and its self-test
-  baseline.py      Single-shot RAG baseline, graded and logged
-  agent.py         Agentic search loop (search / read_doc tools), graded and logged
-  compare.py       Paired comparison of two result files with a bootstrap CI
+  api.py             FastAPI app serving search and ask
+  common/
+    config.py        Shared defaults: model names, index and subset paths, Ollama URL
+  core/
+    ingest.py        Load, chunk, embed, and store documents
+    retrieve.py      Query the index (dense, BM25 or hybrid)
+    bm25.py          BM25 keyword ranking
+    generate.py      Answer a question from retrieved chunks with Ollama
+  benchmarks/
+    bench.py         Load EnterpriseRAG-Bench, build the dev subset, sample questions
+  eval/
+    evaluate.py      Run the eval questions
+    metrics.py       hit@k and MRR
+    recall.py        Document-level retrieval recall on the benchmark questions
+    judge.py         LLM judge (correctness x completeness) and its self-test
+  reasoning/
+    baseline.py      Single-shot RAG baseline, graded and logged
+    agent.py         Agentic search loop (search / read_doc tools), graded and logged
+    compare.py       Paired comparison of two result files with a bootstrap CI
 tests/
 .github/workflows/ CI: ruff and pytest
 Dockerfile         Image with the index and embedding model baked in

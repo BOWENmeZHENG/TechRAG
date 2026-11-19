@@ -20,17 +20,17 @@ dependencies = [
 ]
 
 [project.scripts]
-techrag-ingest = "techrag.ingest:main"
-techrag-retrieve = "techrag.retrieve:main"
-techrag-eval = "techrag.evaluate:main"
-techrag-ask = "techrag.generate:main"
+techrag-ingest = "techrag.core.ingest:main"
+techrag-retrieve = "techrag.core.retrieve:main"
+techrag-eval = "techrag.eval.evaluate:main"
+techrag-ask = "techrag.core.generate:main"
 techrag-serve = "techrag.api:main"
-techrag-subset = "techrag.bench:main"
-techrag-recall = "techrag.recall:main"
-techrag-judge = "techrag.judge:main"
-techrag-baseline = "techrag.baseline:main"
-techrag-agent = "techrag.agent:main"
-techrag-compare = "techrag.compare:main"
+techrag-subset = "techrag.benchmarks.bench:main"
+techrag-recall = "techrag.eval.recall:main"
+techrag-judge = "techrag.eval.judge:main"
+techrag-baseline = "techrag.reasoning.baseline:main"
+techrag-agent = "techrag.reasoning.agent:main"
+techrag-compare = "techrag.reasoning.compare:main"
 
 [dependency-groups]
 dev = [
@@ -54,7 +54,14 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]  # pycodestyle, pyflakes, isort, bugbear, pyupgrade
+select = ["E", "F", "I", "B", "UP", "D"]  # pycodestyle, pyflakes, isort, bugbear, pyupgrade, pydocstyle
+ignore = ["D100", "D104", "D105", "D107"]  # don't require module/package/magic/__init__ docstrings
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

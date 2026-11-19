@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from techrag.bm25 import BM25, tokenize
+from techrag.core.bm25 import BM25, tokenize
 
 
 def test_tokenize_keeps_underscores_but_splits_dots():

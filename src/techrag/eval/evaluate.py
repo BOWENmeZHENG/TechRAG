@@ -9,9 +9,9 @@ from functools import partial
 from pathlib import Path
 from typing import get_args
 
-from techrag.ingest import EMBEDDING_MODEL, INDEX_DIR
-from techrag.metrics import hit_at_k, mean_reciprocal_rank
-from techrag.retrieve import Mode, Result, retrieve
+from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR
+from techrag.core.retrieve import Mode, Result, retrieve
+from techrag.eval.metrics import hit_at_k, mean_reciprocal_rank
 
 QUESTIONS_PATH = Path("eval/questions.jsonl")
 RESULTS_PATH = Path("eval/results.json")
@@ -19,10 +19,16 @@ RESULTS_PATH = Path("eval/results.json")
 
 @dataclass(frozen=True)
 class Question:
-    """An eval question: the query, the document that answers it, and the answering text."""
+    """An eval question: the query, the document that answers it, and the answering text.
+
+    Attributes:
+        query: The question to retrieve for.
+        source: Path of the answering document, relative to the data dir.
+        evidence: Text a retrieved chunk must contain to count as answering the query.
+    """
 
     query: str
-    source: Path  # relative to the data dir, like ``techrag.retrieve.Result.source``
+    source: Path  # relative to the data dir, like ``techrag.core.retrieve.Result.source``
     evidence: str  # text a retrieved chunk must contain to count as answering the query
 
 
@@ -31,6 +37,12 @@ def load_questions(path: Path = QUESTIONS_PATH) -> list[Question]:
 
     Blank lines are skipped. Each other line must be a JSON object with non-empty string
     ``query``, ``source`` and ``evidence`` fields; extra fields are ignored.
+
+    Args:
+        path: JSON Lines file of questions.
+
+    Returns:
+        The questions in file order.
 
     Raises:
         FileNotFoundError: If ``path`` is not an existing file.
@@ -58,7 +70,14 @@ def load_questions(path: Path = QUESTIONS_PATH) -> list[Question]:
 
 
 def _normalize(text: str) -> str:
-    """Lowercase ``text`` and collapse whitespace, so line wrapping does not affect matching."""
+    """Lowercase ``text`` and collapse whitespace, so line wrapping does not affect matching.
+
+    Args:
+        text: Text to normalize.
+
+    Returns:
+        The lowercased text with runs of whitespace replaced by single spaces.
+    """
     return " ".join(text.lower().split())
 
 
@@ -67,6 +86,13 @@ def first_relevant_rank(question: Question, results: Sequence[Result]) -> int | 
 
     A result answers the question if it comes from the question's source and contains its
     evidence, ignoring case and differences in whitespace.
+
+    Args:
+        question: The question being answered.
+        results: Retrieved chunks, best first.
+
+    Returns:
+        The rank of the first answering result, counting from 1, or ``None`` if none answers.
     """
     evidence = _normalize(question.evidence)
     for rank, r in enumerate(results, start=1):
@@ -82,9 +108,17 @@ def evaluate(
 ) -> list[int | None]:
     """Return, for each question, the rank of its first relevant result among the top ``k``.
 
-    The ranks are in question order and feed ``techrag.metrics``; ``None`` marks a question
+    The ranks are in question order and feed ``techrag.eval.metrics``; ``None`` marks a question
     with no relevant result in the top ``k``. ``retriever`` takes a query and ``k`` and returns
-    results best first; it defaults to :func:`techrag.retrieve.retrieve` on the default index.
+    results best first; it defaults to :func:`techrag.core.retrieve.retrieve` on the default index.
+
+    Args:
+        questions: Questions to evaluate.
+        k: Number of results to retrieve per question.
+        retriever: Function taking a query and ``k`` and returning results, best first.
+
+    Returns:
+        One rank per question, in order: 1-based, or ``None`` for a miss.
 
     Raises:
         ValueError: If ``retriever`` rejects ``k`` or a query (the default does).

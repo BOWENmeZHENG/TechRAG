@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from techrag.baseline import (
+from techrag.benchmarks.bench import BenchQuestion
+from techrag.core.retrieve import Result
+from techrag.eval.judge import Verdict
+from techrag.reasoning.baseline import (
     Record,
     gold_found,
     load_records,
@@ -15,9 +18,6 @@ from techrag.baseline import (
     summarize,
     summarize_by,
 )
-from techrag.bench import BenchQuestion
-from techrag.judge import Verdict
-from techrag.retrieve import Result
 
 
 def _question(qid: str, expected: tuple[str, ...] = ("d1",), qtype: str = "basic") -> BenchQuestion:

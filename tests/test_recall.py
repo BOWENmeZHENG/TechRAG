@@ -2,8 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from techrag.bench import BenchQuestion
-from techrag.recall import (
+from techrag.benchmarks.bench import BenchQuestion
+from techrag.core.retrieve import Result
+from techrag.eval.recall import (
     QuestionRanks,
     evaluate,
     format_table,
@@ -11,7 +12,6 @@ from techrag.recall import (
     summarize,
     summarize_by_type,
 )
-from techrag.retrieve import Result
 
 
 def _question(qid: str, expected: tuple[str, ...], qtype: str = "basic") -> BenchQuestion:

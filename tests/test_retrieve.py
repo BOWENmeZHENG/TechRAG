@@ -5,10 +5,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import techrag.retrieve as retrieve_module
-from techrag import ingest
-from techrag.ingest import Chunk, embed_and_store
-from techrag.retrieve import QUERY_PREFIX, Retriever, _rrf, retrieve
+import techrag.core.retrieve as retrieve_module
+from techrag.core import ingest
+from techrag.core.ingest import Chunk, embed_and_store
+from techrag.core.retrieve import QUERY_PREFIX, Retriever, _rrf, retrieve
 
 
 class FakeSentenceTransformer:

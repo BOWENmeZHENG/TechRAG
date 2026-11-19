@@ -1,7 +1,7 @@
 """Single-shot RAG baseline on the EnterpriseRAG-Bench questions of a subset.
 
 For each question the baseline retrieves the top ``k`` chunks once, has an Ollama model answer
-from them, and grades the answer with :mod:`techrag.judge`. It is the number the agentic search
+from them, and grades the answer with :mod:`techrag.eval.judge`. It is the number the agentic search
 loop has to beat, and the per-type breakdown shows where single-shot retrieval falls short.
 
 Every graded question is appended to a JSON Lines file as soon as it finishes, so an interrupted
@@ -19,12 +19,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
-from techrag.bench import SUBSET_DIR, BenchQuestion, doc_id_of, read_questions, sample_questions
-from techrag.generate import OLLAMA_URL, answer_from, ollama_chat
-from techrag.ingest import EMBEDDING_MODEL
-from techrag.judge import JUDGE_MODEL, NUM_CTX, Chat, Verdict, judge, ollama_judge
-from techrag.recall import INDEX_DIR, gold_doc_ranks
-from techrag.retrieve import Mode, Result, Retriever
+from techrag.benchmarks.bench import BenchQuestion, doc_id_of, read_questions, sample_questions
+from techrag.common.config import (
+    DEV_INDEX_DIR,
+    EMBEDDING_MODEL,
+    JUDGE_MODEL,
+    NUM_CTX,
+    OLLAMA_URL,
+    SUBSET_DIR,
+)
+from techrag.core.generate import answer_from, ollama_chat
+from techrag.core.retrieve import Mode, Result, Retriever
+from techrag.eval.judge import Chat, Verdict, judge, ollama_judge
+from techrag.eval.recall import gold_doc_ranks
 
 ANSWER_MODEL = "qwen3.5:9b"
 RESULTS_PATH = Path("eval/baseline.jsonl")
@@ -44,6 +51,20 @@ class Record:
     The last four fields describe an agent run: how many model turns it took, the tokens it
     processed (prompt and reply, summed over turns), why it stopped, and what it did, one entry
     per tool call. The single-shot baseline leaves them empty.
+
+    Attributes:
+        question_id: Id of the question.
+        question_type: Type of the question.
+        answer: The system's answer, empty if it could not produce one.
+        sources: Ids of the documents the system saw, in order.
+        gold_found: Share of the gold documents among ``sources``, or ``None`` if none exist.
+        answer_seconds: Wall-clock seconds spent answering.
+        verdict: The judge's grading, or ``None`` if the question was not graded.
+        error: Why the question could not be answered or graded, or ``None``.
+        steps: Model turns taken (agent runs only).
+        tokens: Tokens processed, prompt and reply summed over turns (agent runs only).
+        stop: Why the agent stopped (agent runs only).
+        trace: One entry per tool call (agent runs only).
     """
 
     question_id: str
@@ -109,6 +130,12 @@ class Record:
     def from_json(cls, line: str) -> "Record":
         """Parse a line written by :meth:`to_json`.
 
+        Args:
+            line: One line of JSON.
+
+        Returns:
+            The record it describes.
+
         Raises:
             ValueError: If ``line`` is not such a record.
         """
@@ -146,6 +173,12 @@ class Record:
 def load_records(path: Path) -> dict[str, Record]:
     """Return the records in ``path`` by question id, the latest of each; empty if no file.
 
+    Args:
+        path: JSON Lines file of records, as written by :func:`run_logged`.
+
+    Returns:
+        A map from question id to its latest record.
+
     Raises:
         ValueError: If a line is not a valid record. The message names the line.
     """
@@ -164,7 +197,15 @@ def load_records(path: Path) -> dict[str, Record]:
 
 
 def gold_found(question: BenchQuestion, results: Sequence[Result]) -> float | None:
-    """Return the share of ``question``'s gold documents that ``results`` come from."""
+    """Return the share of ``question``'s gold documents that ``results`` come from.
+
+    Args:
+        question: The question whose gold documents to look for.
+        results: Retrieved chunks.
+
+    Returns:
+        A value in ``[0, 1]``, or ``None`` if the question has no gold documents.
+    """
     if not question.expected_doc_ids:
         return None
     ranks = gold_doc_ranks(question.expected_doc_ids, results)
@@ -186,6 +227,17 @@ def grade(
     or a request that times out, becomes an ``error`` on the record so that one bad question does
     not end a long run.
 
+    Args:
+        question: The question that was answered.
+        base: Record fields ``question_id``, ``question_type``, ``sources`` and ``gold_found``.
+        text: The answer to grade.
+        seconds: Seconds spent producing the answer.
+        judge_chat: Function that sends the judge its messages and schema and returns its reply.
+        **extra: Further :class:`Record` fields, such as ``steps`` or ``trace``.
+
+    Returns:
+        A record with the verdict, or with an ``error`` if grading failed.
+
     Raises:
         OSError: If the judge's server cannot be reached.
     """
@@ -206,6 +258,16 @@ def run_question(
     """Answer ``question`` from the top ``k`` chunks and grade the answer.
 
     An answer request that times out becomes an ``error`` on the record (see :func:`grade`).
+
+    Args:
+        question: The question to answer.
+        retrieve: Function taking a query and a chunk count and returning chunks, best first.
+        answer_chat: Function that sends the answer model its messages and returns its reply.
+        judge_chat: Function that sends the judge its messages and schema and returns its reply.
+        k: Number of chunks to give the answer model.
+
+    Returns:
+        The graded record of the question.
 
     Raises:
         OSError: If a model server cannot be reached.
@@ -238,6 +300,15 @@ def run_each(
     ``on_record`` is called with each record as it finishes, e.g. to save it. A question in
     ``done`` is redone if it had an error.
 
+    Args:
+        questions: Questions to run, in order.
+        one: Function that runs one question and returns its record.
+        done: Earlier records by question id.
+        on_record: Called with each new record as soon as it is produced.
+
+    Returns:
+        The records produced by this call, in question order.
+
     Raises:
         OSError: If ``one`` does; records already passed to ``on_record`` are kept.
     """
@@ -263,6 +334,18 @@ def run(
     """Run :func:`run_question` on the questions not already graded in ``done``.
 
     See :func:`run_each`.
+
+    Args:
+        questions: Questions to run, in order.
+        retrieve: Function taking a query and a chunk count and returning chunks, best first.
+        answer_chat: Function that sends the answer model its messages and returns its reply.
+        judge_chat: Function that sends the judge its messages and schema and returns its reply.
+        k: Number of chunks to give the answer model.
+        done: Earlier records by question id.
+        on_record: Called with each new record as soon as it is produced.
+
+    Returns:
+        The records produced by this call, in question order.
     """
     return run_each(
         questions, lambda q: run_question(q, retrieve, answer_chat, judge_chat, k), done, on_record
@@ -278,7 +361,16 @@ def run_logged(
     """Run ``one`` on the questions still to do, appending each record to ``output`` as it ends.
 
     Progress goes to stderr. Returns the latest record of every question that has one, in the
-    order of ``questions``. ``fresh`` discards earlier results first.
+    order of ``questions``.
+
+    Args:
+        questions: Questions to run, in order.
+        one: Function that runs one question and returns its record.
+        output: JSON Lines file to append records to and resume from.
+        fresh: Whether to discard earlier results in ``output`` first.
+
+    Returns:
+        The latest record of every question that has one, in the order of ``questions``.
 
     Raises:
         OSError: If ``one`` does, or ``output`` cannot be written.
@@ -308,6 +400,7 @@ def run_logged(
 
 
 def _mean(values: Sequence[float]) -> float:
+    """Return the mean of ``values``, or ``nan`` if it is empty."""
     return sum(values) / len(values) if values else float("nan")
 
 
@@ -316,6 +409,13 @@ def summarize(records: Sequence[Record]) -> dict:
 
     Means cover the graded records only; ``errors`` counts those left out. They are NaN when
     nothing was graded.
+
+    Args:
+        records: Records to summarize.
+
+    Returns:
+        A dict with ``n``, ``errors``, and the mean ``score``, ``correctness`` and
+        ``completeness``.
     """
     graded = [r.verdict for r in records if r.verdict]
     return {
@@ -328,7 +428,15 @@ def summarize(records: Sequence[Record]) -> dict:
 
 
 def summarize_by(records: Sequence[Record], key: Callable[[Record], str]) -> dict[str, dict]:
-    """Return :func:`summarize` for each group of ``records`` sharing a ``key``, by name."""
+    """Return :func:`summarize` for each group of ``records`` sharing a ``key``, by name.
+
+    Args:
+        records: Records to group.
+        key: Function mapping a record to its group name.
+
+    Returns:
+        A map from group name to its :func:`summarize` result, ordered by name.
+    """
     groups: dict[str, list[Record]] = defaultdict(list)
     for r in records:
         groups[key(r)].append(r)
@@ -336,7 +444,15 @@ def summarize_by(records: Sequence[Record], key: Callable[[Record], str]) -> dic
 
 
 def format_table(overall: dict, by_group: dict[str, dict]) -> str:
-    """Render the per-group and overall summaries as a text table."""
+    """Render the per-group and overall summaries as a text table.
+
+    Args:
+        overall: The :func:`summarize` result for all records.
+        by_group: A :func:`summarize_by` result.
+
+    Returns:
+        The table as a multi-line string, ending with an ``ALL`` row.
+    """
     lines = [f"{'':<26}{'n':>5}{'err':>5}{'score':>8}{'correct':>9}{'complete':>10}"]
     for name, s in [*by_group.items(), ("ALL", overall)]:
         lines.append(
@@ -347,7 +463,11 @@ def format_table(overall: dict, by_group: dict[str, dict]) -> str:
 
 
 def print_report(records: Sequence[Record]) -> None:
-    """Print the scores of ``records`` by question type, then by how much gold retrieval found."""
+    """Print the scores of ``records`` by question type, then by how much gold retrieval found.
+
+    Args:
+        records: Records to report on.
+    """
     overall = summarize(records)
     print(format_table(overall, summarize_by(records, lambda r: r.question_type)))
     print()
@@ -358,7 +478,7 @@ def main() -> None:
     """Entry point for the ``techrag-baseline`` command."""
     parser = argparse.ArgumentParser(description="Run the single-shot RAG baseline.")
     parser.add_argument("--subset", type=Path, default=SUBSET_DIR, help="subset with questions")
-    parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
+    parser.add_argument("--index-dir", type=Path, default=DEV_INDEX_DIR)
     parser.add_argument("--embedding-model", default=EMBEDDING_MODEL, help="must match ingest")
     parser.add_argument("--mode", choices=get_args(Mode), default="hybrid", help="ranking method")
     parser.add_argument("-k", type=int, default=10, help="chunks to give the model")

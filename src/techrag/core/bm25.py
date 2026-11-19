@@ -14,6 +14,12 @@ def tokenize(text: str) -> list[str]:
     ``requires_grad`` stays one token while ``torch.nn.Module`` becomes ``torch``, ``nn``
     and ``module``. There is no stemming or stop-word removal; BM25's IDF already
     down-weights common words.
+
+    Args:
+        text: Text to tokenize.
+
+    Returns:
+        The lowercase tokens in order of appearance, with repeats.
     """
     return _TOKEN.findall(text.lower())
 
@@ -26,6 +32,13 @@ class BM25:
     """
 
     def __init__(self, documents: Sequence[str], k1: float = 1.5, b: float = 0.75) -> None:
+        """Compute the term statistics for ``documents``.
+
+        Args:
+            documents: Texts to rank. Scores are returned in this order.
+            k1: Term-frequency saturation; higher values let repeated terms count for longer.
+            b: Length normalization from 0 (none) to 1 (full).
+        """
         self._k1 = k1
         self._b = b
         self._term_counts = [Counter(tokenize(d)) for d in documents]
@@ -43,6 +56,12 @@ class BM25:
         """Return the BM25 score of every document for ``query``, in document order.
 
         A document sharing no term with the query scores 0.
+
+        Args:
+            query: Query text, tokenized with :func:`tokenize`.
+
+        Returns:
+            One score per document, in the order passed to the constructor.
         """
         terms = set(tokenize(query)) & self._idf.keys()
         out = []

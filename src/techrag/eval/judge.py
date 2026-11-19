@@ -28,13 +28,10 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from techrag.bench import SUBSET_DIR, BenchQuestion, read_questions
-from techrag.generate import OLLAMA_URL, ollama_chat
+from techrag.benchmarks.bench import BenchQuestion, read_questions
+from techrag.common.config import JUDGE_MODEL, NUM_CTX, OLLAMA_URL, SUBSET_DIR
+from techrag.core.generate import ollama_chat
 
-JUDGE_MODEL = "qwen3.5:9b"
-# Room for the prompt and a verdict with one entry per fact: the longest question has 46 facts,
-# which needs about 8k tokens, and Ollama's default window of 4096 cuts the reply off mid-JSON.
-NUM_CTX = 16384
 SELFTEST_PATH = Path("eval/judge_selftest.json")
 ABSTAIN = "I cannot answer this question from the available documentation."
 INFO_NOT_FOUND = "info_not_found"
@@ -65,7 +62,14 @@ Chat = Callable[[Sequence[dict[str, str]], dict], str]
 
 
 def verdict_schema(n_facts: int) -> dict:
-    """Return the JSON schema of a verdict on ``n_facts`` facts, with exactly one entry for each."""
+    """Return the JSON schema of a verdict on ``n_facts`` facts, with exactly one entry for each.
+
+    Args:
+        n_facts: Number of answer facts being graded.
+
+    Returns:
+        A JSON schema for Ollama's ``format`` parameter.
+    """
     return {
         "type": "object",
         "properties": {
@@ -94,6 +98,12 @@ class Verdict:
     empty if there is none. ``prohibitions`` marks the facts that forbid a claim instead of
     stating one (see :func:`is_prohibition`); for those, ``facts_met`` is true unless the answer
     makes the forbidden claim. It defaults to no prohibitions.
+
+    Attributes:
+        facts_met: Per fact, whether the answer meets it.
+        contradiction: Statement conflicting with the reference answer, or empty.
+        reason: The judge's one-sentence explanation.
+        prohibitions: Per fact, whether it forbids a claim.
     """
 
     facts_met: tuple[bool, ...]
@@ -138,7 +148,15 @@ class Verdict:
 
 
 def build_messages(question: BenchQuestion, answer: str) -> list[dict[str, str]]:
-    """Return the chat messages asking the judge to grade ``answer`` to ``question``."""
+    """Return the chat messages asking the judge to grade ``answer`` to ``question``.
+
+    Args:
+        question: The question, with its reference answer and answer facts.
+        answer: The candidate answer to grade.
+
+    Returns:
+        A system message and a user message listing the facts as ``STATE`` or ``FORBIDDEN``.
+    """
     facts = "\n".join(
         f"{i}. [{'FORBIDDEN' if is_prohibition(f) else 'STATE'}] {f}"
         for i, f in enumerate(question.answer_facts, start=1)
@@ -155,14 +173,26 @@ def build_messages(question: BenchQuestion, answer: str) -> list[dict[str, str]]
 
 
 def is_prohibition(fact: str) -> bool:
-    """Return whether ``fact`` forbids a claim ("The answer must not ...") instead of making one."""
+    """Return whether ``fact`` forbids a claim ("The answer must not ...") instead of making one.
+
+    Args:
+        fact: One of a question's answer facts.
+
+    Returns:
+        ``True`` if the fact starts with "The answer must not", ignoring case.
+    """
     return fact.lower().startswith("the answer must not")
 
 
 def parse_verdict(raw: str, prohibitions: Sequence[bool]) -> Verdict:
     """Parse the judge's JSON reply into a :class:`Verdict`.
 
-    ``prohibitions`` has one entry per fact, saying whether that fact forbids a claim.
+    Args:
+        raw: The judge's reply, expected to be JSON matching :func:`verdict_schema`.
+        prohibitions: One entry per fact, saying whether that fact forbids a claim.
+
+    Returns:
+        The verdict, with ``prohibitions`` attached.
 
     Raises:
         ValueError: If ``raw`` is not JSON of the expected shape or has no entry for each fact.
@@ -194,6 +224,15 @@ def judge(
     judge's raw reply. A blank answer meets nothing and is graded without calling it. An unusable
     reply is retried up to ``retries`` times.
 
+    Args:
+        question: The question, with its reference answer and answer facts.
+        answer: The candidate answer to grade.
+        chat: Function taking the chat messages and a schema and returning the raw reply.
+        retries: Number of extra attempts after an unusable reply.
+
+    Returns:
+        The judge's verdict on ``answer``.
+
     Raises:
         ValueError: If ``question`` has no answer facts, or the judge never gives a usable verdict.
         OSError: If ``chat`` fails.
@@ -219,6 +258,14 @@ def ollama_judge(model: str = JUDGE_MODEL, host: str = OLLAMA_URL, think: bool =
 
     Sampling is greedy (temperature 0) so grading is repeatable. Reasoning is off by default,
     since the verdict already carries per-fact evidence and thinking is slow.
+
+    Args:
+        model: Name of the Ollama model to judge with.
+        host: Base URL of the Ollama server.
+        think: Whether a reasoning model should think before replying.
+
+    Returns:
+        A function taking the chat messages and a schema and returning the raw reply.
     """
 
     def chat(messages: Sequence[dict[str, str]], schema: dict) -> str:
@@ -231,7 +278,15 @@ def ollama_judge(model: str = JUDGE_MODEL, host: str = OLLAMA_URL, think: bool =
 
 @dataclass(frozen=True)
 class Probe:
-    """An answer whose correct score is known, and what the judge gave it."""
+    """An answer whose correct score is known, and what the judge gave it.
+
+    Attributes:
+        question_id: Id of the question the answer was built for.
+        kind: How the probe was built: ``reference``, ``abstain``, ``partial`` or ``mismatch``.
+        answer: The probe answer.
+        expected: The score a correct judge would give.
+        verdict: What the judge gave.
+    """
 
     question_id: str
     kind: str
@@ -254,6 +309,12 @@ def make_probes(questions: Sequence[BenchQuestion]) -> list[tuple[BenchQuestion,
     * ``partial``: the first half of the facts that state something (for questions with at least
       two), expected to score that share, since it states nothing forbidden;
     * ``mismatch``: the reference answer of the next answerable question, expected 0.
+
+    Args:
+        questions: Questions to build probes for.
+
+    Returns:
+        The probes, in question order.
     """
     answerable = [q for q in questions if q.type != INFO_NOT_FOUND]
     probes = []
@@ -291,6 +352,15 @@ def selftest(
     Returns the graded probes and a description of each probe the judge never gave a usable
     verdict for, so one bad reply does not lose the rest of a long run.
 
+    Args:
+        questions: Questions to sample from; those without answer facts are ignored.
+        chat: Function taking the chat messages and a schema and returning the raw reply.
+        n: Number of questions to build probes from.
+        seed: Seed for the sample.
+
+    Returns:
+        The graded probes and a description of each probe that failed.
+
     Raises:
         OSError: If ``chat`` fails.
     """
@@ -306,7 +376,15 @@ def selftest(
 
 
 def summarize_probes(probes: Sequence[Probe]) -> dict[str, dict[str, float]]:
-    """Return, per probe kind, the count, mean expected and observed score, and mean error."""
+    """Return, per probe kind, the count, mean expected and observed score, and mean error.
+
+    Args:
+        probes: Graded probes from :func:`selftest`.
+
+    Returns:
+        A map from probe kind to ``n``, ``expected``, ``observed``, ``mean_abs_error`` and
+        ``within_0.25`` (the share of probes within 0.25 of the expected score).
+    """
     groups: dict[str, list[Probe]] = defaultdict(list)
     for p in probes:
         groups[p.kind].append(p)
