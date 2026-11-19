@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import sys
 import urllib.request
 from collections.abc import Callable, Sequence
@@ -10,7 +11,10 @@ from pathlib import Path
 from typing import get_args
 
 from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR, LLM_MODEL, OLLAMA_URL
+from techrag.common.log import setup_logging
 from techrag.core.retrieve import Mode, Result, retrieve
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "You answer questions about a company's internal documents: Slack threads, emails, Jira and "
@@ -189,6 +193,7 @@ def main() -> None:
     )
     parser.add_argument("--mode", choices=get_args(Mode), default="dense", help="ranking method")
     args = parser.parse_args()
+    setup_logging()
 
     def chat(messages: Sequence[dict[str, str]]) -> str:
         return ollama_chat(messages, args.llm, args.ollama_url)
@@ -197,10 +202,10 @@ def main() -> None:
         result = answer(args.query, args.k, chat, args.index_dir, args.embedding_model, args.mode)
     except (OSError, ValueError) as e:
         sys.exit(f"error: {e}")
-    print(result.text)
-    print("\nSources:")
+    logger.info(result.text)
+    logger.info("\nSources:")
     for i, r in enumerate(result.sources, start=1):
-        print(f"[{i}] {r.source}  (score {r.score:.3f})")
+        logger.info("[%d] %s  (score %.3f)", i, r.source, r.score)
 
 
 if __name__ == "__main__":

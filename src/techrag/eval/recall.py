@@ -11,6 +11,7 @@ retrieve, so they are skipped.
 
 import argparse
 import json
+import logging
 import sys
 from collections import defaultdict
 from collections.abc import Callable, Sequence
@@ -20,7 +21,10 @@ from typing import get_args
 
 from techrag.benchmarks.bench import BenchQuestion, doc_id_of, read_questions
 from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR, SUBSET_DIR
+from techrag.common.log import setup_logging
 from techrag.core.retrieve import Mode, Result, Retriever
+
+logger = logging.getLogger(__name__)
 
 KS = (5, 10, 20, 50, 100)
 RESULTS_PATH = Path("eval/recall.json")
@@ -179,6 +183,7 @@ def main() -> None:
     parser.add_argument("--mode", choices=get_args(Mode), default="dense", help="ranking method")
     parser.add_argument("--output", type=Path, default=RESULTS_PATH, help="JSON report to write")
     args = parser.parse_args()
+    setup_logging()
 
     try:
         questions = read_questions(args.subset / "questions.jsonl")
@@ -203,8 +208,8 @@ def main() -> None:
     except (OSError, ValueError) as e:
         sys.exit(f"error: {e}")
 
-    print(format_table(overall, by_type))
-    print(f"\n{len(questions) - len(rows)} questions without gold documents skipped")
+    logger.info(format_table(overall, by_type))
+    logger.info("\n%d questions without gold documents skipped", len(questions) - len(rows))
 
 
 if __name__ == "__main__":

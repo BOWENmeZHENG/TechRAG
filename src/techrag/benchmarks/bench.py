@@ -8,6 +8,7 @@ chunk's ``source`` identifies its document (see :func:`doc_id_of`).
 
 import argparse
 import json
+import logging
 import random
 import sys
 from collections import Counter
@@ -18,6 +19,9 @@ from pathlib import Path
 import pyarrow.parquet as pq
 
 from techrag.common.config import SUBSET_DIR
+from techrag.common.log import setup_logging
+
+logger = logging.getLogger(__name__)
 
 BENCH_DIR = Path("data/external/EnterpriseRAG-Bench")
 
@@ -309,14 +313,18 @@ def main() -> None:
     parser.add_argument("--distractors", type=int, default=20_000, help="non-gold documents")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
+    setup_logging()
 
     try:
         manifest = build_subset(args.bench_dir, args.out_dir, args.distractors, args.seed)
     except (FileNotFoundError, ValueError) as e:
         sys.exit(f"error: {e}")
-    print(
-        f"Wrote {manifest['documents']} documents ({manifest['gold_documents']} gold, "
-        f"{manifest['distractors']} distractors) to {args.out_dir}"
+    logger.info(
+        "Wrote %d documents (%d gold, %d distractors) to %s",
+        manifest["documents"],
+        manifest["gold_documents"],
+        manifest["distractors"],
+        args.out_dir,
     )
 
 

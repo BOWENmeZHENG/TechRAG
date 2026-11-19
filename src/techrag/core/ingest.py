@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import sys
 from dataclasses import dataclass
 from functools import cache
@@ -13,6 +14,9 @@ from langchain_text_splitters import Language, RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 
 from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR
+from techrag.common.log import setup_logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -144,6 +148,7 @@ def main() -> None:
     parser.add_argument("--overlap", type=int, default=50, help="characters shared by chunks")
     parser.add_argument("--model", default=EMBEDDING_MODEL, help="sentence-transformers model")
     args = parser.parse_args()
+    setup_logging()
 
     try:
         documents = load_documents(args.data_dir)
@@ -155,7 +160,9 @@ def main() -> None:
         embed_and_store(chunks, args.index_dir, args.model)
     except (FileNotFoundError, ValueError) as e:
         sys.exit(f"error: {e}")
-    print(f"Indexed {len(chunks)} chunks from {len(documents)} documents into {args.index_dir}")
+    logger.info(
+        "Indexed %d chunks from %d documents into %s", len(chunks), len(documents), args.index_dir
+    )
 
 
 if __name__ == "__main__":

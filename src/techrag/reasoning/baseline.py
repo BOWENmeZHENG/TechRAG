@@ -11,6 +11,7 @@ are retried on the next run; the latest record of a question wins.
 
 import argparse
 import json
+import logging
 import sys
 import time
 from collections import defaultdict
@@ -28,10 +29,13 @@ from techrag.common.config import (
     OLLAMA_URL,
     SUBSET_DIR,
 )
+from techrag.common.log import setup_logging
 from techrag.core.generate import answer_from, ollama_chat
 from techrag.core.retrieve import Mode, Result, Retriever
 from techrag.eval.judge import Chat, Verdict, judge, ollama_judge
 from techrag.eval.recall import gold_doc_ranks
+
+logger = logging.getLogger(__name__)
 
 ANSWER_MODEL = "qwen3.5:9b"
 RESULTS_PATH = Path("eval/baseline.jsonl")
@@ -360,7 +364,7 @@ def run_logged(
 ) -> list[Record]:
     """Run ``one`` on the questions still to do, appending each record to ``output`` as it ends.
 
-    Progress goes to stderr. Returns the latest record of every question that has one, in the
+    Progress is logged. Returns the latest record of every question that has one, in the
     order of ``questions``.
 
     Args:
@@ -381,7 +385,7 @@ def run_logged(
     done = load_records(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     todo = sum(q.id not in done or done[q.id].error is not None for q in questions)
-    print(f"{len(questions)} questions, {todo} to run", file=sys.stderr)
+    logger.info("%d questions, %d to run", len(questions), todo)
 
     with output.open("a", encoding="utf-8") as f:
 
@@ -390,9 +394,7 @@ def run_logged(
             f.flush()
             outcome = record.error or f"score {record.score:.2f}"
             detail = f" ({record.steps} steps, {record.stop})" if record.steps else ""
-            print(
-                f"  {record.question_id} {record.question_type}: {outcome}{detail}", file=sys.stderr
-            )
+            logger.info("  %s %s: %s%s", record.question_id, record.question_type, outcome, detail)
 
         run_each(questions, one, done, save)
     latest = load_records(output)
@@ -463,15 +465,15 @@ def format_table(overall: dict, by_group: dict[str, dict]) -> str:
 
 
 def print_report(records: Sequence[Record]) -> None:
-    """Print the scores of ``records`` by question type, then by how much gold retrieval found.
+    """Log the scores of ``records`` by question type, then by how much gold retrieval found.
 
     Args:
         records: Records to report on.
     """
     overall = summarize(records)
-    print(format_table(overall, summarize_by(records, lambda r: r.question_type)))
-    print()
-    print(format_table(overall, summarize_by(records, lambda r: r.retrieval_group)))
+    logger.info(format_table(overall, summarize_by(records, lambda r: r.question_type)))
+    logger.info("")
+    logger.info(format_table(overall, summarize_by(records, lambda r: r.retrieval_group)))
 
 
 def main() -> None:
@@ -492,6 +494,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=RESULTS_PATH, help="JSON Lines results")
     parser.add_argument("--fresh", action="store_true", help="discard earlier results first")
     args = parser.parse_args()
+    setup_logging()
 
     def answer_chat(messages: Sequence[dict[str, str]]) -> str:
         # The same context window as the judge, so Ollama keeps one model loaded for both.

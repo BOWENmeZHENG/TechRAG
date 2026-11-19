@@ -7,13 +7,17 @@ mostly noise; the overall interval says whether the gap is bigger than that.
 """
 
 import argparse
+import logging
 import random
 import sys
 from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
 
+from techrag.common.log import setup_logging
 from techrag.reasoning.baseline import Record, load_records
+
+logger = logging.getLogger(__name__)
 
 Pair = tuple[Record, Record]
 
@@ -138,6 +142,7 @@ def main() -> None:
     parser.add_argument("b", type=Path, help="results of the second system (e.g. the agent)")
     parser.add_argument("--names", nargs=2, default=("baseline", "agent"), metavar=("A", "B"))
     args = parser.parse_args()
+    setup_logging()
 
     try:
         a, b = load_records(args.a), load_records(args.b)
@@ -146,8 +151,15 @@ def main() -> None:
     pairs = paired(a, b)
     if not pairs:
         sys.exit("error: no question is graded in both files")
-    print(format_report(pairs, *args.names))
-    print(f"\n{len(pairs)} questions graded by both ({len(a)} in {args.a}, {len(b)} in {args.b})")
+    logger.info(format_report(pairs, *args.names))
+    logger.info(
+        "\n%d questions graded by both (%d in %s, %d in %s)",
+        len(pairs),
+        len(a),
+        args.a,
+        len(b),
+        args.b,
+    )
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ the facts, another question's answer) and measures how often it agrees.
 
 import argparse
 import json
+import logging
 import random
 import sys
 from collections import defaultdict
@@ -30,7 +31,10 @@ from pathlib import Path
 
 from techrag.benchmarks.bench import BenchQuestion, read_questions
 from techrag.common.config import JUDGE_MODEL, NUM_CTX, OLLAMA_URL, SUBSET_DIR
+from techrag.common.log import setup_logging
 from techrag.core.generate import ollama_chat
+
+logger = logging.getLogger(__name__)
 
 SELFTEST_PATH = Path("eval/judge_selftest.json")
 ABSTAIN = "I cannot answer this question from the available documentation."
@@ -411,6 +415,7 @@ def main() -> None:
     parser.add_argument("--think", action="store_true", help="let the judge model reason first")
     parser.add_argument("--output", type=Path, default=SELFTEST_PATH, help="JSON report to write")
     args = parser.parse_args()
+    setup_logging()
 
     try:
         questions = read_questions(args.subset / "questions.jsonl")
@@ -442,24 +447,28 @@ def main() -> None:
     except (OSError, ValueError) as e:
         sys.exit(f"error: {e}")
 
-    print(
+    logger.info(
         f"{'probe':<12}{'n':>4}{'expected':>10}{'observed':>10}{'mean|err|':>11}{'within .25':>12}"
     )
     for kind, s in summary.items():
-        print(
+        logger.info(
             f"{kind:<12}{s['n']:>4}{s['expected']:>10.2f}{s['observed']:>10.2f}"
             f"{s['mean_abs_error']:>11.2f}{s['within_0.25']:>12.2f}"
         )
     if failures:
-        print(f"\n{len(failures)} probes got no usable verdict and were left out:")
+        logger.info("\n%d probes got no usable verdict and were left out:", len(failures))
         for failure in failures:
-            print(f"  {failure}")
+            logger.info("  %s", failure)
     bad = [p for p in probes if p.error > 0.25]
-    print(f"\n{len(bad)} of {len(probes)} graded probes off by more than 0.25")
+    logger.info("\n%d of %d graded probes off by more than 0.25", len(bad), len(probes))
     for p in bad:
-        print(
-            f"  {p.question_id} {p.kind}: expected {p.expected:.2f}, got {p.verdict.score:.2f}"
-            f" ({p.verdict.reason})"
+        logger.info(
+            "  %s %s: expected %.2f, got %.2f (%s)",
+            p.question_id,
+            p.kind,
+            p.expected,
+            p.verdict.score,
+            p.verdict.reason,
         )
 
 

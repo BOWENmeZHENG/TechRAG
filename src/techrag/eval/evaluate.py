@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -10,8 +11,11 @@ from pathlib import Path
 from typing import get_args
 
 from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR
+from techrag.common.log import setup_logging
 from techrag.core.retrieve import Mode, Result, retrieve
 from techrag.eval.metrics import hit_at_k, mean_reciprocal_rank
+
+logger = logging.getLogger(__name__)
 
 QUESTIONS_PATH = Path("eval/questions.jsonl")
 RESULTS_PATH = Path("eval/results.json")
@@ -139,6 +143,7 @@ def main() -> None:
         "--output", type=Path, default=RESULTS_PATH, help="JSON file to write the results to"
     )
     args = parser.parse_args()
+    setup_logging()
 
     try:
         questions = load_questions(args.questions)
@@ -179,10 +184,10 @@ def main() -> None:
         sys.exit(f"error: {e}")
 
     for q, rank in zip(questions, ranks, strict=True):
-        print(f"{'miss' if rank is None else f'rank {rank}':>7}  {q.query}")
-    print(f"\n{len(questions)} questions")
-    print(f"hit@{args.k}: {hit:.3f}")
-    print(f"MRR:    {mrr:.3f}")
+        logger.info("%7s  %s", "miss" if rank is None else f"rank {rank}", q.query)
+    logger.info("\n%d questions", len(questions))
+    logger.info("hit@%d: %.3f", args.k, hit)
+    logger.info("MRR:    %.3f", mrr)
 
 
 if __name__ == "__main__":

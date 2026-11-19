@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import sys
 from dataclasses import dataclass
 from functools import cached_property
@@ -11,8 +12,11 @@ from typing import Literal, get_args
 import faiss
 
 from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR
+from techrag.common.log import setup_logging
 from techrag.core.bm25 import BM25
 from techrag.core.ingest import _embed, _load_model
+
+logger = logging.getLogger(__name__)
 
 # BGE models are trained to match short queries against longer passages when the query
 # carries this instruction. Passages (see ingest) are embedded without it.
@@ -214,13 +218,14 @@ def main() -> None:
     parser.add_argument("--model", default=EMBEDDING_MODEL, help="must match the ingest model")
     parser.add_argument("--mode", choices=get_args(Mode), default="dense", help="ranking method")
     args = parser.parse_args()
+    setup_logging()
 
     try:
         results = retrieve(args.query, args.k, args.index_dir, args.model, args.mode)
     except (FileNotFoundError, ValueError) as e:
         sys.exit(f"error: {e}")
     for rank, r in enumerate(results, start=1):
-        print(f"[{rank}] {r.source}  (score {r.score:.3f})\n{r.text}\n")
+        logger.info("[%d] %s  (score %.3f)\n%s\n", rank, r.source, r.score, r.text)
 
 
 if __name__ == "__main__":

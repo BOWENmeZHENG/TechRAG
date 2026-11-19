@@ -29,6 +29,7 @@ from techrag.common.config import (
     OLLAMA_URL,
     SUBSET_DIR,
 )
+from techrag.common.log import setup_logging
 from techrag.core.retrieve import Mode, Result, Retriever
 from techrag.eval.judge import Chat, ollama_judge
 from techrag.reasoning.baseline import Record, grade, print_report, run_logged
@@ -589,6 +590,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=RESULTS_PATH, help="JSON Lines results")
     parser.add_argument("--fresh", action="store_true", help="discard earlier results first")
     args = parser.parse_args()
+    setup_logging()
 
     try:
         questions = read_questions(args.subset / "questions.jsonl")
