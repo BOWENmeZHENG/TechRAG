@@ -131,8 +131,8 @@ class Retriever:
         Returns:
             ``(chunk id, cosine similarity)`` pairs, best first.
         """
-        vectors = _embed([QUERY_PREFIX + query], self._model_name)
-        scores, ids = self._index.search(vectors, min(n, self._index.ntotal))
+        query_vectors = _embed([QUERY_PREFIX + query], self._model_name)  # (1, dim)
+        scores, ids = self._index.search(query_vectors, min(n, self._index.ntotal))
         return [(int(i), float(s)) for s, i in zip(scores[0], ids[0], strict=True)]
 
     def _bm25_ranking(self, query: str) -> list[tuple[int, float]]:
