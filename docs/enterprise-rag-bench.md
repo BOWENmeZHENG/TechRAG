@@ -112,8 +112,9 @@ The full corpus is too large to index locally, so `techrag-subset` builds a deve
 - **Every gold document** (so every question stays answerable), plus
 - a **seeded random sample of distractors** from the rest of the corpus.
 
-The current dev subset (`data/subsets/dev/`, seed 0) holds 1,723 documents: 723 gold and 1,000
-distractors. Documents are written as `<source_type>/<doc_id>.md`, so a retrieved chunk's source
+The size is set by `--distractors` (default 20,000). The subset currently on disk
+(`data/subsets/dev/`, seed 0) holds 1,723 documents: 723 gold and 1,000 distractors. The results
+in the main README used 20,000 distractors. Documents are written as `<source_type>/<doc_id>.md`, so a retrieved chunk's source
 path identifies its document (`doc_id_of`). That is how retrieval is scored.
 
 Because the subset has only a small share of the distractors, it is **easier than the real

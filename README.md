@@ -8,6 +8,8 @@ model. It is prompted to plan each lookup, read whole documents instead of trust
 flag documents that disagree, and say so when the evidence is missing. It is measured on
 [EnterpriseRAG-Bench](#reasoning-rag-on-enterpriserag-bench) (about 512k enterprise documents, 500
 questions across ten types) against a single-shot RAG baseline, with an LLM judge for grading.
+[docs/enterprise-rag-bench.md](docs/enterprise-rag-bench.md) explains the dataset and each
+question type.
 
 Underneath is a small [retrieval toolkit](#core-rag-toolkit): Markdown docs are chunked, embedded
 with [`BAAI/bge-small-en-v1.5`](https://huggingface.co/BAAI/bge-small-en-v1.5), stored in FAISS and
@@ -91,6 +93,25 @@ Everything runs locally on Ollama (`qwen3.5:9b` answers, researches and judges),
 share defaults, so the steps run in order with no flags. Requires the
 [Setup](#setup) above, the dataset under `data/external/EnterpriseRAG-Bench` (git-ignored) and
 `ollama pull qwen3.5:9b`.
+
+### The questions
+
+The 500 questions come in ten types, which differ in what makes them hard:
+
+| Type | Count | Gold docs | Tests |
+| --- | ---: | ---: | --- |
+| `basic` | 175 | 1 | A direct lookup |
+| `semantic` | 125 | 1 | Phrasing with little keyword overlap |
+| `intra_document_reasoning` | 40 | 1 | Combining distant sections of one document |
+| `project_related` | 40 | 2–9 | Aggregating several documents of a project |
+| `constrained` | 30 | 1–2 | Qualifiers (date, region, customer) pick one of several similar documents |
+| `conflicting_info` | 20 | 2 | Documents disagree; the answer must reconcile them |
+| `completeness` | 20 | 2–10 | Needs every relevant document |
+| `miscellaneous` | 20 | 1 | Informal or off-topic documents |
+| `info_not_found` | 20 | 0 | The corpus has no answer; the model should say so |
+| `high_level` | 10 | 0 | Broad question with no single source |
+
+See [docs/enterprise-rag-bench.md](docs/enterprise-rag-bench.md) for examples and scoring.
 
 ### Build a dev subset and index it
 
@@ -364,6 +385,7 @@ uv run ruff check    # lint
 data/quicktest/    Small sample corpus to index (committed)
 data/subsets/      Benchmark dev subset built by techrag-subset (git-ignored)
 data/external/     Downloaded datasets, e.g. EnterpriseRAG-Bench (git-ignored)
+docs/              Notes on the EnterpriseRAG-Bench data and question types
 eval/              Labelled questions (and generated results)
 src/techrag/
   api.py             FastAPI app serving search and ask
