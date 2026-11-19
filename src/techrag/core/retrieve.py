@@ -14,7 +14,7 @@ import faiss
 from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR
 from techrag.common.log import setup_logging
 from techrag.core.bm25 import BM25
-from techrag.core.ingest import _embed, _load_model
+from techrag.core.embed import embed, load_model
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ class Retriever:
 
     def warm_up(self) -> None:
         """Load the embedding model and build the BM25 statistics now rather than on first use."""
-        _load_model(self._model_name)
+        load_model(self._model_name)
         _ = self._bm25
 
     def search(self, query: str, k: int = 5, mode: Mode = "dense") -> list[Result]:
@@ -135,7 +135,7 @@ class Retriever:
         Returns:
             ``(chunk id, cosine similarity)`` pairs, best first.
         """
-        query_vectors = _embed([QUERY_PREFIX + query], self._model_name)  # (1, dim)
+        query_vectors = embed([QUERY_PREFIX + query], self._model_name)  # (1, dim)
         scores, ids = self._index.search(query_vectors, min(n, self._index.ntotal))
         return [(int(i), float(s)) for s, i in zip(scores[0], ids[0], strict=True)]
 

@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from techrag.common.log import setup_logging
-from techrag.reasoning.baseline import Record, load_records
+from techrag.reasoning.harness import Record, load_records
 
 logger = logging.getLogger(__name__)
 

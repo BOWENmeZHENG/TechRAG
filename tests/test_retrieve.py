@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 import techrag.core.retrieve as retrieve_module
-from techrag.core import ingest
+from techrag.core import embed as embed_module
 from techrag.core.ingest import Chunk, embed_and_store
 from techrag.core.retrieve import QUERY_PREFIX, Retriever, _rrf, retrieve
 
@@ -35,10 +35,10 @@ class FakeSentenceTransformer:
 
 @pytest.fixture
 def fake_model(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setattr(ingest, "SentenceTransformer", FakeSentenceTransformer)
-    ingest._load_model.cache_clear()  # don't reuse a model cached by another test
+    monkeypatch.setattr(embed_module, "SentenceTransformer", FakeSentenceTransformer)
+    embed_module.load_model.cache_clear()  # don't reuse a model cached by another test
     yield
-    ingest._load_model.cache_clear()  # don't leak the fake into other tests
+    embed_module.load_model.cache_clear()  # don't leak the fake into other tests
 
 
 @pytest.fixture
@@ -167,7 +167,7 @@ def test_warm_up_loads_model_and_builds_bm25(
     index_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     loaded: list[str] = []
-    monkeypatch.setattr(retrieve_module, "_load_model", loaded.append)
+    monkeypatch.setattr(retrieve_module, "load_model", loaded.append)
     retriever = Retriever(index_dir, model_name="my-model")
 
     retriever.warm_up()

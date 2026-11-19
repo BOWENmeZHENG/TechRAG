@@ -32,7 +32,7 @@ from pathlib import Path
 from techrag.benchmarks.bench import BenchQuestion, read_questions
 from techrag.common.config import JUDGE_MODEL, NUM_CTX, OLLAMA_URL, SUBSET_DIR
 from techrag.common.log import setup_logging
-from techrag.core.generate import ollama_chat
+from techrag.common.ollama import ollama_chat
 
 logger = logging.getLogger(__name__)
 

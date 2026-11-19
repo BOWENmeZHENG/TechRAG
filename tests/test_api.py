@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from techrag.api import create_app
-from techrag.core import ingest
+from techrag.core import embed as embed_module
 from techrag.core.ingest import Chunk, embed_and_store
 from techrag.core.retrieve import QUERY_PREFIX, Retriever
 
@@ -34,11 +34,11 @@ class FakeSentenceTransformer:
 
 @pytest.fixture
 def fake_model(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setattr(ingest, "SentenceTransformer", FakeSentenceTransformer)
+    monkeypatch.setattr(embed_module, "SentenceTransformer", FakeSentenceTransformer)
     monkeypatch.setattr(FakeSentenceTransformer, "loads", 0)
-    ingest._load_model.cache_clear()  # don't reuse a model cached by another test
+    embed_module.load_model.cache_clear()  # don't reuse a model cached by another test
     yield
-    ingest._load_model.cache_clear()  # don't leak the fake into other tests
+    embed_module.load_model.cache_clear()  # don't leak the fake into other tests
 
 
 @pytest.fixture

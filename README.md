@@ -360,8 +360,10 @@ src/techrag/
   api.py             FastAPI app serving search and ask
   common/
     config.py        Shared defaults: model names, index and subset paths, Ollama URL
+    ollama.py        Minimal Ollama chat client
   core/
-    ingest.py        Load, chunk, embed, and store documents
+    ingest.py        Load, chunk, and store documents
+    embed.py         Load the embedding model and embed texts
     retrieve.py      Query the index (dense, BM25 or hybrid)
     bm25.py          BM25 keyword ranking
     generate.py      Answer a question from retrieved chunks with Ollama
@@ -371,6 +373,7 @@ src/techrag/
     recall.py        Document-level retrieval recall on the benchmark questions
     judge.py         LLM judge (correctness x completeness) and its self-test
   reasoning/
+    harness.py       Shared run, grade, log and report machinery
     baseline.py      Single-shot RAG baseline, graded and logged
     agent.py         Agentic search loop (search / read_doc tools), graded and logged
     compare.py       Paired comparison of two result files with a bootstrap CI

@@ -3,7 +3,7 @@
 Instead of retrieving once, the model decides what to look for: it calls ``search`` to find
 passages and ``read_doc`` to read a whole document, as often as it needs within a step budget,
 then answers (or says it cannot). Answers are graded and logged exactly like the single-shot
-baseline's (see :mod:`techrag.reasoning.baseline`), so the two are directly comparable.
+baseline's (see :mod:`techrag.reasoning.harness`), so the two are directly comparable.
 
 The loop is independent of Ollama: it talks to the model through an :data:`AgentChat` function,
 which :func:`ollama_agent_chat` provides.
@@ -32,7 +32,7 @@ from techrag.common.config import (
 from techrag.common.log import setup_logging
 from techrag.core.retrieve import Mode, Result, Retriever
 from techrag.eval.judge import Chat, ollama_judge
-from techrag.reasoning.baseline import Record, grade, print_report, run_logged
+from techrag.reasoning.harness import Record, grade, print_report, run_logged
 
 AGENT_MODEL = "qwen3.5:9b"
 RESULTS_PATH = Path("eval/agent.jsonl")
