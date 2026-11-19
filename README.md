@@ -101,7 +101,7 @@ in `questions.jsonl`:
 
 ```sh
 uv run techrag-subset                                      # --distractors, --seed, --out-dir
-uv run techrag-ingest data/subsets/dev --index-dir .index/dev
+uv run techrag-ingest data/subsets/dev
 ```
 
 ### Measure retrieval
@@ -182,11 +182,11 @@ uv run techrag-ingest [data_dir]
 ```
 
 Reads every `*.md` file under `data_dir` (default `data/quicktest`), chunks it, embeds the chunks, and
-writes the index to `.index/` (git-ignored). The embedding model is downloaded on first use.
+writes the index to `.index/dev/` (git-ignored). The embedding model is downloaded on first use.
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `--index-dir` | `.index` | Where to write the index |
+| `--index-dir` | `.index/dev` | Where to write the index |
 | `--size` | `500` | Max characters per chunk |
 | `--overlap` | `50` | Characters shared by adjacent chunks |
 | `--model` | `BAAI/bge-small-en-v1.5` | sentence-transformers model |
@@ -232,7 +232,7 @@ server, a model that hasn't been pulled, or a missing index exit with an `error:
 | `-k` | `5` | Number of chunks given to the model |
 | `--llm` | `llama3.2:3b` | Ollama model to answer with |
 | `--ollama-url` | `http://localhost:11434` | Ollama server address |
-| `--index-dir` | `.index` | Index to search |
+| `--index-dir` | `.index/dev` | Index to search |
 | `--embedding-model` | `BAAI/bge-small-en-v1.5` | Must match the ingest model |
 | `--mode` | `dense` | Retrieval method: `dense` (embeddings), `bm25` (keyword match) or `hybrid` (both, fused) |
 
@@ -280,7 +280,7 @@ or inconsistent index exits with an `error: ...` message. Interactive docs are a
 | --- | --- | --- |
 | `--host` | `127.0.0.1` | Address to listen on |
 | `--port` | `8000` | Port to listen on |
-| `--index-dir` | `.index` | Index to serve |
+| `--index-dir` | `.index/dev` | Index to serve |
 | `--embedding-model` | `BAAI/bge-small-en-v1.5` | Must match the ingest model |
 | `--llm` | `llama3.2:3b` | Ollama model used by `/ask` |
 | `--ollama-url` | `http://localhost:11434` | Ollama server address |

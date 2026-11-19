@@ -22,8 +22,8 @@ from typing import get_args
 
 from techrag.benchmarks.bench import BenchQuestion, doc_id_of, read_questions, sample_questions
 from techrag.common.config import (
-    DEV_INDEX_DIR,
     EMBEDDING_MODEL,
+    INDEX_DIR,
     JUDGE_MODEL,
     NUM_CTX,
     OLLAMA_URL,
@@ -574,7 +574,7 @@ def main() -> None:
     """Entry point for the ``techrag-agent`` command."""
     parser = argparse.ArgumentParser(description="Run the agentic search loop on the benchmark.")
     parser.add_argument("--subset", type=Path, default=SUBSET_DIR, help="subset to search")
-    parser.add_argument("--index-dir", type=Path, default=DEV_INDEX_DIR)
+    parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
     parser.add_argument("--embedding-model", default=EMBEDDING_MODEL, help="must match ingest")
     parser.add_argument("--mode", choices=get_args(Mode), default="hybrid", help="ranking method")
     parser.add_argument("--llm", default=AGENT_MODEL, help="Ollama model that does the research")
