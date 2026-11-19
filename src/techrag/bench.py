@@ -11,7 +11,7 @@ import json
 import random
 import sys
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -113,6 +113,39 @@ def read_questions(path: Path) -> list[BenchQuestion]:
 def doc_id_of(source: Path | str) -> str:
     """Return the benchmark document id of a subset file path such as ``jira/dsid_ab.md``."""
     return Path(source).stem.split(_DUPLICATE_SEP)[0]
+
+
+def sample_questions(
+    questions: Sequence[BenchQuestion],
+    n: int | None = None,
+    per_type: int | None = None,
+    seed: int = 0,
+) -> list[BenchQuestion]:
+    """Return a seeded sample of ``questions`` in their original order.
+
+    With ``per_type``, up to that many questions of every type, so that small types are not lost
+    in a random sample. Otherwise ``n`` questions drawn uniformly. With neither, all of them.
+    Each type is shuffled on its own, so growing ``per_type`` only adds questions: results
+    saved for a smaller sample stay valid for a larger one.
+
+    Raises:
+        ValueError: If ``n`` and ``per_type`` are both given, or either is not positive.
+    """
+    if n is not None and per_type is not None:
+        raise ValueError("give n or per_type, not both")
+    if (n is not None and n <= 0) or (per_type is not None and per_type <= 0):
+        raise ValueError("sample sizes must be positive")
+    if per_type is not None:
+        chosen: set[str] = set()
+        for qtype in sorted({q.type for q in questions}):
+            group = [q for q in questions if q.type == qtype]
+            random.Random(f"{seed}:{qtype}").shuffle(group)
+            chosen.update(q.id for q in group[:per_type])
+        return [q for q in questions if q.id in chosen]
+    if n is not None:
+        picked = {q.id for q in random.Random(seed).sample(list(questions), min(n, len(questions)))}
+        return [q for q in questions if q.id in picked]
+    return list(questions)
 
 
 def render_document(title: str, content: str) -> str:

@@ -11,7 +11,6 @@ are retried on the next run; the latest record of a question wins.
 
 import argparse
 import json
-import random
 import sys
 import time
 from collections import defaultdict
@@ -20,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
-from techrag.bench import SUBSET_DIR, BenchQuestion, doc_id_of, read_questions
+from techrag.bench import SUBSET_DIR, BenchQuestion, doc_id_of, read_questions, sample_questions
 from techrag.generate import OLLAMA_URL, answer_from, ollama_chat
 from techrag.ingest import EMBEDDING_MODEL
 from techrag.judge import JUDGE_MODEL, NUM_CTX, Chat, Verdict, judge, ollama_judge
@@ -368,6 +367,7 @@ def main() -> None:
     parser.add_argument("--judge-model", default=JUDGE_MODEL, help="Ollama model to grade with")
     parser.add_argument("--ollama-url", default=OLLAMA_URL)
     parser.add_argument("-n", type=int, help="run on a seeded random sample of this many questions")
+    parser.add_argument("--per-type", type=int, help="run on this many questions of every type")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output", type=Path, default=RESULTS_PATH, help="JSON Lines results")
     parser.add_argument("--fresh", action="store_true", help="discard earlier results first")
@@ -381,8 +381,7 @@ def main() -> None:
 
     try:
         questions = read_questions(args.subset / "questions.jsonl")
-        if args.n is not None:
-            questions = random.Random(args.seed).sample(questions, min(args.n, len(questions)))
+        questions = sample_questions(questions, args.n, args.per_type, args.seed)
         retriever = Retriever(args.index_dir, args.embedding_model)
         retriever.warm_up()
         judge_chat = ollama_judge(args.judge_model, args.ollama_url)

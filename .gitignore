@@ -227,6 +227,8 @@ eval/recall*.json
 eval/judge*.json
 eval/baseline*.jsonl
 eval/agent*.jsonl
+eval/*_report.txt
+eval/*_progress.log
 # downloaded datasets (e.g. from Hugging Face)
 data/external/*
 !data/external/.gitkeep
