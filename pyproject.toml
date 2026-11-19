@@ -29,6 +29,8 @@ techrag-subset = "techrag.bench:main"
 techrag-recall = "techrag.recall:main"
 techrag-judge = "techrag.judge:main"
 techrag-baseline = "techrag.baseline:main"
+techrag-agent = "techrag.agent:main"
+techrag-compare = "techrag.compare:main"
 
 [dependency-groups]
 dev = [
