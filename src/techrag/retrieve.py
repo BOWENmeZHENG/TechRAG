@@ -44,13 +44,20 @@ class Retriever:
     on first use and the embedding model is loaded on the first dense or hybrid query;
     :meth:`warm_up` does both up front, e.g. at server startup. Searches only read this state,
     so one instance can serve concurrent callers.
-
-    Raises:
-        FileNotFoundError: If ``index_dir`` does not contain an index built by ingest.
-        ValueError: If the index and ``chunks.json`` disagree on the number of chunks.
     """
 
     def __init__(self, index_dir: Path = INDEX_DIR, model_name: str = EMBEDDING_MODEL) -> None:
+        """Load the index written by :func:`techrag.ingest.embed_and_store`.
+
+        Args:
+            index_dir: Directory holding ``index.faiss`` and ``chunks.json``.
+            model_name: sentence-transformers model used to embed queries. Must match the
+                model the index was built with.
+
+        Raises:
+            FileNotFoundError: If ``index_dir`` does not contain an index built by ingest.
+            ValueError: If the index and ``chunks.json`` disagree on the number of chunks.
+        """
         index_path = index_dir / "index.faiss"
         chunks_path = index_dir / "chunks.json"
         if not index_path.is_file() or not chunks_path.is_file():
@@ -82,6 +89,14 @@ class Retriever:
 
         See :func:`retrieve` for what the modes mean and what is returned.
 
+        Args:
+            query: Natural-language question or keywords. Must not be blank.
+            k: Maximum number of results. Must be positive.
+            mode: Ranking method: ``"dense"``, ``"bm25"`` or ``"hybrid"``.
+
+        Returns:
+            Up to ``k`` results ordered from most to least relevant.
+
         Raises:
             ValueError: If ``query`` is blank, ``k`` is not positive or ``mode`` is unknown.
         """
@@ -106,13 +121,28 @@ class Retriever:
         ]
 
     def _dense_ranking(self, query: str, n: int) -> list[tuple[int, float]]:
-        """Return the ``n`` chunk ids most similar to ``query`` with their cosine similarity."""
+        """Return the ``n`` chunk ids most similar to ``query`` with their cosine similarity.
+
+        Args:
+            query: Query text; the BGE query prefix is added here.
+            n: Number of chunks to return, capped at the index size.
+
+        Returns:
+            ``(chunk id, cosine similarity)`` pairs, best first.
+        """
         vectors = _embed([QUERY_PREFIX + query], self._model_name)
         scores, ids = self._index.search(vectors, min(n, self._index.ntotal))
         return [(int(i), float(s)) for s, i in zip(scores[0], ids[0], strict=True)]
 
     def _bm25_ranking(self, query: str) -> list[tuple[int, float]]:
-        """Return the chunks sharing a term with ``query`` as (id, BM25 score), best first."""
+        """Return the chunks sharing a term with ``query`` as (id, BM25 score), best first.
+
+        Args:
+            query: Query text.
+
+        Returns:
+            ``(chunk id, BM25 score)`` pairs with a positive score, ties broken by chunk id.
+        """
         scores = self._bm25.scores(query)
         ranked = sorted((i for i, s in enumerate(scores) if s > 0), key=lambda i: (-scores[i], i))
         return [(i, scores[i]) for i in ranked]
@@ -136,6 +166,16 @@ def retrieve(
     This loads the index on every call; to answer many queries, build a :class:`Retriever` once
     and call its :meth:`~Retriever.search`.
 
+    Args:
+        query: Natural-language question or keywords. Must not be blank.
+        k: Maximum number of results. Must be positive.
+        index_dir: Directory holding the index written by ingest.
+        model_name: Embedding model used for ``dense`` and ``hybrid`` queries.
+        mode: Ranking method: ``"dense"``, ``"bm25"`` or ``"hybrid"``.
+
+    Returns:
+        Up to ``k`` results ordered from most to least relevant.
+
     Raises:
         ValueError: If ``query`` is blank, ``k`` is not positive, ``mode`` is unknown, or the
             index and ``chunks.json`` in ``index_dir`` disagree on the number of chunks.
@@ -149,6 +189,13 @@ def _rrf(*rankings: list[tuple[int, float]]) -> list[tuple[int, float]]:
 
     A chunk's score is the sum of ``1 / (RRF_K + rank)`` over the rankings it appears in. Ties
     are broken by chunk id so the order is deterministic.
+
+    Args:
+        *rankings: Rankings of ``(chunk id, score)`` pairs, each best first. The input
+            scores are ignored; only the order matters.
+
+    Returns:
+        ``(chunk id, fused score)`` pairs for every chunk in any ranking, best first.
     """
     fused: dict[int, float] = {}
     for ranking in rankings:

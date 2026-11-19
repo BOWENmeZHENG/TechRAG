@@ -19,31 +19,42 @@ Query = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class SearchRequest(BaseModel):
+    """Body of ``POST /search`` and ``POST /ask``."""
+
     query: Query
     k: int = Field(5, ge=1, description="number of chunks to return or give the model")
     mode: Mode = "dense"
 
 
 class Source(BaseModel):
+    """A retrieved chunk as returned over HTTP."""
+
     source: str = Field(description="path of the document, relative to the data directory")
     text: str
     score: float = Field(description="comparable only within one query and mode")
 
     @classmethod
     def from_result(cls, result: Result) -> "Source":
+        """Convert a retrieval ``result`` to its HTTP representation."""
         return cls(source=result.source.as_posix(), text=result.text, score=result.score)
 
 
 class SearchResponse(BaseModel):
+    """Response of ``POST /search``: the matching chunks, best first."""
+
     results: list[Source]
 
 
 class AskResponse(BaseModel):
+    """Response of ``POST /ask``: the model's answer and the chunks it was given."""
+
     answer: str
     sources: list[Source]
 
 
 class HealthResponse(BaseModel):
+    """Response of ``GET /healthz``: service status and the number of indexed chunks."""
+
     status: str
     chunks: int
 
@@ -57,6 +68,13 @@ def create_app(
     ``retriever`` is loaded once by the caller and shared by every request, so the index and
     embedding model are not reloaded per call. ``chat`` takes the chat messages and returns the
     model's reply, as in :func:`techrag.generate.answer_from`.
+
+    Args:
+        retriever: Loaded index used by ``/search``, ``/ask`` and ``/healthz``.
+        chat: Function that sends chat messages to the language model and returns its reply.
+
+    Returns:
+        A FastAPI app exposing ``GET /healthz``, ``POST /search`` and ``POST /ask``.
     """
     app = FastAPI(title="TechRAG")
     app.state.retriever = retriever

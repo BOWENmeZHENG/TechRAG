@@ -29,7 +29,17 @@ _DUPLICATE_SEP = "~"
 
 @dataclass(frozen=True)
 class BenchQuestion:
-    """A benchmark question with its reference answer and the documents that support it."""
+    """A benchmark question with its reference answer and the documents that support it.
+
+    Attributes:
+        id: Unique question id.
+        type: Question type, e.g. ``info_not_found``.
+        text: The question as asked.
+        expected_doc_ids: Ids of the documents that answer it; empty for unanswerable and
+            high-level questions.
+        gold_answer: The reference answer.
+        answer_facts: Checklist of facts an answer must satisfy; see :mod:`techrag.judge`.
+    """
 
     id: str
     type: str
@@ -41,6 +51,12 @@ class BenchQuestion:
 
 def load_questions(bench_dir: Path = BENCH_DIR) -> list[BenchQuestion]:
     """Load the benchmark questions from the dataset under ``bench_dir``, in file order.
+
+    Args:
+        bench_dir: Root of the downloaded EnterpriseRAG-Bench dataset.
+
+    Returns:
+        The questions in file order.
 
     Raises:
         FileNotFoundError: If the questions file is missing.
@@ -62,7 +78,12 @@ def load_questions(bench_dir: Path = BENCH_DIR) -> list[BenchQuestion]:
 
 
 def write_questions(questions: Iterable[BenchQuestion], path: Path) -> None:
-    """Write ``questions`` to ``path`` as JSON Lines, one object per question."""
+    """Write ``questions`` to ``path`` as JSON Lines, one object per question.
+
+    Args:
+        questions: Questions to write.
+        path: File to create or overwrite. Its directory must exist.
+    """
     lines = [
         json.dumps(
             {
@@ -82,6 +103,12 @@ def write_questions(questions: Iterable[BenchQuestion], path: Path) -> None:
 
 def read_questions(path: Path) -> list[BenchQuestion]:
     """Read the questions :func:`write_questions` wrote to the JSON Lines file at ``path``.
+
+    Args:
+        path: JSON Lines file of question records.
+
+    Returns:
+        The questions in file order. Blank lines are skipped.
 
     Raises:
         FileNotFoundError: If ``path`` is not an existing file.
@@ -111,7 +138,14 @@ def read_questions(path: Path) -> list[BenchQuestion]:
 
 
 def doc_id_of(source: Path | str) -> str:
-    """Return the benchmark document id of a subset file path such as ``jira/dsid_ab.md``."""
+    """Return the benchmark document id of a subset file path such as ``jira/dsid_ab.md``.
+
+    Args:
+        source: Path of a subset document, relative to the subset directory.
+
+    Returns:
+        The file name without its extension or any duplicate-disambiguating suffix.
+    """
     return Path(source).stem.split(_DUPLICATE_SEP)[0]
 
 
@@ -127,6 +161,15 @@ def sample_questions(
     in a random sample. Otherwise ``n`` questions drawn uniformly. With neither, all of them.
     Each type is shuffled on its own, so growing ``per_type`` only adds questions: results
     saved for a smaller sample stay valid for a larger one.
+
+    Args:
+        questions: Questions to sample from.
+        n: Number of questions to draw uniformly. Exclusive with ``per_type``.
+        per_type: Maximum number of questions to draw from each type. Exclusive with ``n``.
+        seed: Seed for the random generator, so the sample is reproducible.
+
+    Returns:
+        The sampled questions in their original order.
 
     Raises:
         ValueError: If ``n`` and ``per_type`` are both given, or either is not positive.
@@ -149,16 +192,34 @@ def sample_questions(
 
 
 def render_document(title: str, content: str) -> str:
-    """Return the Markdown written for a document: its title as an H1, then its content."""
+    """Return the Markdown written for a document: its title as an H1, then its content.
+
+    Args:
+        title: Document title.
+        content: Document body.
+
+    Returns:
+        The Markdown text of the document.
+    """
     return f"# {title}\n\n{content}\n"
 
 
 def sample_distractors(candidates: list[int], count: int, seed: int) -> set[int]:
-    """Return ``count`` of ``candidates`` chosen uniformly at random (all if fewer exist)."""
+    """Return ``count`` of ``candidates`` chosen uniformly at random (all if fewer exist).
+
+    Args:
+        candidates: Row numbers to choose from.
+        count: Number to choose.
+        seed: Seed for the random generator.
+
+    Returns:
+        The chosen row numbers.
+    """
     return set(random.Random(seed).sample(candidates, min(count, len(candidates))))
 
 
 def _batches(documents_path: Path, columns: list[str]) -> Iterable[list[dict]]:
+    """Yield the rows of ``columns`` in ``documents_path`` in batches of up to 2000."""
     # A single row group holds the whole corpus, so stream it in small batches.
     for batch in pq.ParquetFile(documents_path).iter_batches(batch_size=2000, columns=columns):
         yield batch.to_pylist()
@@ -173,8 +234,17 @@ def build_subset(
     """Write the gold documents plus ``distractors`` random others under ``out_dir``.
 
     Existing files are overwritten; files from an earlier, differently sized subset are not
-    removed, so use a fresh ``out_dir`` when changing ``distractors`` or ``seed``. Returns the
-    manifest that is also written to ``out_dir``.
+    removed, so use a fresh ``out_dir`` when changing ``distractors`` or ``seed``.
+
+    Args:
+        bench_dir: Root of the downloaded EnterpriseRAG-Bench dataset.
+        out_dir: Directory to write the documents, ``questions.jsonl`` and ``manifest.json`` to.
+        distractors: Number of non-gold documents to include.
+        seed: Seed for choosing the distractors.
+
+    Returns:
+        The manifest that is also written to ``out_dir``: the seed, document counts and the
+        count per source type.
 
     Raises:
         FileNotFoundError: If the dataset is missing.

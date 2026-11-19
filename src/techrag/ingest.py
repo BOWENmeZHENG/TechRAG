@@ -35,6 +35,13 @@ class Chunk:
 def load_documents(path: Path) -> list[Document]:
     """Load every Markdown file under ``path``, in sorted order.
 
+    Args:
+        path: Directory to search recursively for ``*.md`` files.
+
+    Returns:
+        One :class:`Document` per file, each with its path relative to ``path`` and its
+        UTF-8 text.
+
     Raises:
         FileNotFoundError: If ``path`` is not an existing directory.
     """
@@ -53,6 +60,15 @@ def chunk(text: str, size: int = 500, overlap: int = 50) -> list[str]:
     separators only when a section is too large. Adjacent chunks may share up to
     ``overlap`` characters of context.
 
+    Args:
+        text: Markdown source to split.
+        size: Maximum characters per chunk. Must be positive.
+        overlap: Maximum characters shared by adjacent chunks. Must be non-negative and
+            smaller than ``size``.
+
+    Returns:
+        The chunks in document order, empty if ``text`` is blank.
+
     Raises:
         ValueError: If ``size`` is not positive, or ``overlap`` is negative or not
             smaller than ``size``.
@@ -65,12 +81,27 @@ def chunk(text: str, size: int = 500, overlap: int = 50) -> list[str]:
 
 @cache
 def _load_model(model_name: str) -> SentenceTransformer:
-    """Load the embedding model once per process, so repeated queries do not reload it."""
+    """Load the embedding model once per process, so repeated queries do not reload it.
+
+    Args:
+        model_name: sentence-transformers model name or path.
+
+    Returns:
+        The loaded model, cached per ``model_name``.
+    """
     return SentenceTransformer(model_name)
 
 
 def _embed(chunks: list[str], model_name: str) -> np.ndarray:
-    """Return L2-normalized float32 embeddings for ``chunks``, one row per chunk."""
+    """Return L2-normalized float32 embeddings for ``chunks``, one row per chunk.
+
+    Args:
+        chunks: Texts to embed.
+        model_name: sentence-transformers model to embed with.
+
+    Returns:
+        An array of shape ``(len(chunks), embedding_dim)``.
+    """
     model = _load_model(model_name)
     return model.encode(chunks, normalize_embeddings=True, convert_to_numpy=True).astype(np.float32)
 
@@ -84,6 +115,12 @@ def embed_and_store(
     similarity) and ``chunks.json`` (a list of ``{"source", "text"}`` objects, where
     row ``i`` of the index corresponds to ``chunks[i]``). Any existing index in
     ``index_dir`` is replaced.
+
+    Args:
+        chunks: Chunks to index. Must not be empty.
+        index_dir: Directory to write the index into; created if missing.
+        model_name: sentence-transformers model to embed with. Queries must later use the
+            same model.
 
     Raises:
         ValueError: If ``chunks`` is empty.

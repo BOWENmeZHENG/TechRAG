@@ -113,7 +113,12 @@ TOOL_SCHEMAS: tuple[dict, ...] = (
 
 @dataclass(frozen=True)
 class ToolCall:
-    """A tool the model asked to call."""
+    """A tool the model asked to call.
+
+    Attributes:
+        name: Name of the tool, e.g. ``search``.
+        arguments: The arguments the model passed.
+    """
 
     name: str
     arguments: dict
@@ -121,7 +126,13 @@ class ToolCall:
 
 @dataclass(frozen=True)
 class Reply:
-    """One model turn: what it said, the tools it called, and the tokens it used."""
+    """One model turn: what it said, the tools it called, and the tokens it used.
+
+    Attributes:
+        content: The text of the reply.
+        tool_calls: The tools the model asked to call, if any.
+        tokens: Prompt and reply tokens processed for this turn.
+    """
 
     content: str
     tool_calls: tuple[ToolCall, ...] = ()
@@ -140,23 +151,50 @@ class DocStore:
     """
 
     def __init__(self, root: Path) -> None:
+        """Index the documents under ``root`` by id.
+
+        Args:
+            root: Subset directory holding ``<source_type>/<doc_id>.md`` files.
+        """
         self._paths: dict[str, Path] = {}
         for path in sorted(root.glob("*/*.md")):
             self._paths.setdefault(doc_id_of(path), path)
         self._titles: dict[str, str] = {}
 
     def __len__(self) -> int:
+        """Return the number of documents."""
         return len(self._paths)
 
     def __contains__(self, doc_id: str) -> bool:
+        """Return whether there is a document with id ``doc_id``."""
         return doc_id in self._paths
 
     def source_type(self, doc_id: str) -> str:
-        """Return the source type (``slack``, ``jira``, ...) of a document."""
+        """Return the source type (``slack``, ``jira``, ...) of a document.
+
+        Args:
+            doc_id: Id of a document in the store.
+
+        Returns:
+            The name of the directory the document is in.
+
+        Raises:
+            KeyError: If there is no such document.
+        """
         return self._paths[doc_id].parent.name
 
     def title(self, doc_id: str) -> str:
-        """Return the title of a document: its first Markdown heading, or its id."""
+        """Return the title of a document: its first Markdown heading, or its id.
+
+        Args:
+            doc_id: Id of a document in the store.
+
+        Returns:
+            The title, cached after the first call.
+
+        Raises:
+            KeyError: If there is no such document.
+        """
         if doc_id not in self._titles:
             title = doc_id
             with self._paths[doc_id].open(encoding="utf-8") as f:
@@ -171,6 +209,15 @@ class DocStore:
 
         The page names the document and the span it covers, and says where to continue when the
         document goes on.
+
+        Args:
+            doc_id: Id of a document in the store.
+            start: Character offset to read from; clamped to the document.
+            size: Number of characters to read.
+
+        Returns:
+            The page, with a header naming the document and span and, if the document
+            continues, a footer giving the next ``start``.
 
         Raises:
             KeyError: If there is no such document.
@@ -193,6 +240,12 @@ class Tools:
     """
 
     def __init__(self, search: Callable[[str, int], Sequence[Result]], docs: DocStore) -> None:
+        """Create the tools.
+
+        Args:
+            search: Function taking a query and a chunk count and returning chunks, best first.
+            docs: Store the ``read_doc`` tool reads from.
+        """
         self._search = search
         self._docs = docs
 
@@ -201,6 +254,12 @@ class Tools:
 
         A call that cannot run (unknown tool, bad arguments, unknown document) returns an
         explanation as its text, so the model can correct itself.
+
+        Args:
+            call: The tool call requested by the model.
+
+        Returns:
+            The text to show the model, and the ids of the documents it showed.
         """
         args = call.arguments
         try:
@@ -214,6 +273,7 @@ class Tools:
         return f"Unknown tool {call.name!r}. Use search or read_doc.", []
 
     def _do_search(self, query: str, k: int) -> tuple[str, list[str]]:
+        """Search for ``query`` and return excerpts of up to ``k`` documents and their ids."""
         results = self._search(query, k * CHUNKS_PER_DOC)
         excerpts: dict[str, list[str]] = {}
         for r in results:
@@ -230,6 +290,7 @@ class Tools:
         return f"{len(blocks)} documents for {query!r}:\n\n" + "\n\n".join(blocks), shown
 
     def _do_read(self, doc_id: str, start: int) -> tuple[str, list[str]]:
+        """Return a page of ``doc_id`` from offset ``start`` and its id, or an explanation."""
         if doc_id not in self._docs:
             return f"No document with id {doc_id!r}. Use an id from a search result.", []
         return self._docs.read(doc_id, start), [doc_id]
@@ -243,6 +304,14 @@ class Trajectory:
     ``max_steps`` (step budget used up), ``context`` (prompt grew too long) or ``empty`` (a reply
     with neither an answer nor a tool call). ``docs_seen`` lists the documents it was shown, in
     order of first appearance; ``trace`` has one entry per tool call.
+
+    Attributes:
+        answer: The final answer.
+        steps: Model turns taken, not counting the forced final answer.
+        tokens: Tokens processed, prompt and reply summed over turns.
+        stop: Why the run ended.
+        docs_seen: Ids of the documents shown to the model, in order of first appearance.
+        trace: One entry per tool call.
     """
 
     answer: str
@@ -254,6 +323,7 @@ class Trajectory:
 
 
 def _size(messages: Sequence[dict]) -> int:
+    """Return the total characters of the ``content`` of ``messages``."""
     return sum(len(m.get("content") or "") for m in messages)
 
 
@@ -269,6 +339,16 @@ def run_agent(
     Each model turn is a step. The model answers by replying without a tool call. When it uses
     up ``max_steps`` turns, or the prompt passes ``context_chars`` characters, it is told to
     answer with what it has. A call identical to an earlier one is not run again.
+
+    Args:
+        question: The question to research.
+        chat: Function that sends the conversation and tool schemas to the model.
+        tools: The tools the model may call.
+        max_steps: Maximum number of model turns before it must answer.
+        context_chars: Prompt size, in characters, past which the model must answer.
+
+    Returns:
+        The answer and how the run went.
 
     Raises:
         OSError, ValueError: If ``chat`` fails.
@@ -335,6 +415,12 @@ def run_agent(
 def parse_reply(payload: dict) -> Reply:
     """Parse an Ollama ``/api/chat`` response into a :class:`Reply`.
 
+    Args:
+        payload: The decoded JSON response.
+
+    Returns:
+        The reply's text, tool calls and token count.
+
     Raises:
         ValueError: If ``payload`` is not a chat response or a tool call is malformed.
     """
@@ -369,6 +455,17 @@ def ollama_agent_chat(
 
     The returned function raises ``OSError`` if the server cannot be reached or rejects the
     request (e.g. a model that does not support tools), and ``ValueError`` for an unusable reply.
+
+    Args:
+        model: Name of the Ollama model.
+        host: Base URL of the Ollama server.
+        think: Whether the model should think before replying.
+        num_ctx: Context window in tokens.
+        timeout: Seconds to wait for each reply.
+
+    Returns:
+        A function taking the conversation and tool schemas (``None`` to forbid tool calls)
+        and returning the model's :class:`Reply`.
     """
 
     def chat(messages: Sequence[dict], tools: Sequence[dict] | None) -> Reply:
@@ -396,7 +493,15 @@ def ollama_agent_chat(
 
 
 def gold_share(question: BenchQuestion, doc_ids: Sequence[str]) -> float | None:
-    """Return the share of ``question``'s gold documents among ``doc_ids``, None if it has none."""
+    """Return the share of ``question``'s gold documents among ``doc_ids``, None if it has none.
+
+    Args:
+        question: The question whose gold documents to look for.
+        doc_ids: Ids of the documents the agent was shown.
+
+    Returns:
+        A value in ``[0, 1]``, or ``None`` if the question has no gold documents.
+    """
     if not question.expected_doc_ids:
         return None
     seen = set(doc_ids)
@@ -414,6 +519,16 @@ def run_question(
 
     A request that times out, or a reply that cannot be parsed, becomes an ``error`` on the
     record so that one bad question does not end a long run.
+
+    Args:
+        question: The question to answer.
+        chat: Function that sends the conversation and tool schemas to the model.
+        make_tools: Factory for the tools, called once per question.
+        judge_chat: Function that sends the judge its messages and schema and returns its reply.
+        max_steps: Maximum number of model turns before the agent must answer.
+
+    Returns:
+        The graded record of the question.
 
     Raises:
         OSError: If a model server cannot be reached.

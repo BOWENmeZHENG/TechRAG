@@ -54,7 +54,14 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]  # pycodestyle, pyflakes, isort, bugbear, pyupgrade
+select = ["E", "F", "I", "B", "UP", "D"]  # pycodestyle, pyflakes, isort, bugbear, pyupgrade, pydocstyle
+ignore = ["D100", "D104", "D105", "D107"]  # don't require module/package/magic/__init__ docstrings
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

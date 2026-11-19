@@ -36,6 +36,14 @@ def build_messages(query: str, results: Sequence[Result]) -> list[dict[str, str]
 
     Passages are numbered from 1 in the order given, so a citation like ``[2]`` refers to
     ``results[1]``.
+
+    Args:
+        query: The user's question.
+        results: Retrieved chunks, best first, to use as numbered context passages.
+
+    Returns:
+        A system message with the instructions followed by a user message with the passages
+        and the question, in the format Ollama's chat API expects.
     """
     context = "\n\n".join(
         f"[{i}] (source: {r.source})\n{r.text}" for i, r in enumerate(results, start=1)
@@ -62,6 +70,18 @@ def ollama_chat(
     thinking on or off, ``temperature`` overrides the model's sampling temperature and ``num_ctx``
     its context window in tokens (prompt and reply together; a reply is cut short when they do
     not fit). Each is left to the server's default when ``None``.
+
+    Args:
+        messages: Chat messages, each with ``role`` and ``content`` keys.
+        model: Name of the Ollama model to chat with.
+        host: Base URL of the Ollama server.
+        format: JSON schema the reply must conform to.
+        think: Whether a reasoning model should think before replying.
+        temperature: Sampling temperature.
+        num_ctx: Context window in tokens, prompt and reply together.
+
+    Returns:
+        The text of the model's reply.
 
     Raises:
         OSError: If the server cannot be reached (including a connection refused because
@@ -110,6 +130,18 @@ def answer(
     retrieved (``dense``, ``bm25`` or ``hybrid``); with ``bm25`` the model gets no passages if
     none share a term with ``query``.
 
+    Args:
+        query: The user's question.
+        k: Number of chunks to retrieve and give the model.
+        chat: Function that takes the chat messages and returns the model's reply.
+        index_dir: Directory holding the index written by ingest.
+        embedding_model: Model used to embed the query. Must match the one the index was
+            built with.
+        mode: Retrieval method: ``"dense"``, ``"bm25"`` or ``"hybrid"``.
+
+    Returns:
+        The model's reply and the chunks it was given.
+
     Raises:
         ValueError, FileNotFoundError: As for :func:`techrag.retrieve.retrieve`.
         OSError, ValueError: If ``chat`` fails (the default does on an unreachable server).
@@ -124,6 +156,14 @@ def answer_from(
     chat: Callable[[Sequence[dict[str, str]]], str] = ollama_chat,
 ) -> Answer:
     """Answer ``query`` from already retrieved ``results``, best first.
+
+    Args:
+        query: The user's question.
+        results: Retrieved chunks, best first.
+        chat: Function that takes the chat messages and returns the model's reply.
+
+    Returns:
+        The model's reply, stripped of surrounding whitespace, and ``results``.
 
     Raises:
         OSError, ValueError: If ``chat`` fails (the default does on an unreachable server).

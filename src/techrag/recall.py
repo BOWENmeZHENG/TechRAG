@@ -33,25 +33,52 @@ class QuestionRanks:
 
     ``ranks`` maps every expected document id to the 1-based rank of the first retrieved chunk
     from that document, or ``None`` if none of the retrieved chunks came from it.
+
+    Attributes:
+        question: The benchmark question.
+        ranks: Rank of each expected document id, or ``None`` if it was not retrieved.
     """
 
     question: BenchQuestion
     ranks: dict[str, int | None]
 
     def recall(self, k: int) -> float:
-        """Return the fraction of the gold documents found within the top ``k`` chunks."""
+        """Return the fraction of the gold documents found within the top ``k`` chunks.
+
+        Args:
+            k: Number of top-ranked chunks to consider.
+
+        Returns:
+            A value in ``[0, 1]``.
+        """
         found = sum(r is not None and r <= k for r in self.ranks.values())
         return found / len(self.ranks)
 
     def complete(self, k: int) -> bool:
-        """Return whether every gold document was found within the top ``k`` chunks."""
+        """Return whether every gold document was found within the top ``k`` chunks.
+
+        Args:
+            k: Number of top-ranked chunks to consider.
+
+        Returns:
+            ``True`` if no gold document is missing from the top ``k`` chunks.
+        """
         return all(r is not None and r <= k for r in self.ranks.values())
 
 
 def gold_doc_ranks(
     expected_doc_ids: Sequence[str], results: Sequence[Result]
 ) -> dict[str, int | None]:
-    """Return the 1-based rank of the first chunk of each expected document in ``results``."""
+    """Return the 1-based rank of the first chunk of each expected document in ``results``.
+
+    Args:
+        expected_doc_ids: Ids of the documents that answer the question.
+        results: Retrieved chunks, best first.
+
+    Returns:
+        A map from each expected document id to the rank of its first chunk in ``results``,
+        or ``None`` if none of its chunks were retrieved.
+    """
     ranks: dict[str, int | None] = dict.fromkeys(expected_doc_ids)
     for rank, result in enumerate(results, start=1):
         doc_id = doc_id_of(result.source)
@@ -69,6 +96,14 @@ def evaluate(
 
     ``retriever`` takes a query and a chunk count and returns chunks best first. Questions
     without expected documents are left out of the result.
+
+    Args:
+        questions: Benchmark questions to evaluate.
+        retriever: Function taking a query and a chunk count and returning chunks, best first.
+        k: Number of chunks to retrieve per question.
+
+    Returns:
+        One :class:`QuestionRanks` per question that has expected documents, in input order.
     """
     return [
         QuestionRanks(q, gold_doc_ranks(q.expected_doc_ids, retriever(q.text, k)))
@@ -80,7 +115,12 @@ def evaluate(
 def summarize(rows: Sequence[QuestionRanks], ks: Sequence[int] = KS) -> dict:
     """Return the mean recall and the share of fully answered questions at each cutoff.
 
-    The result has the shape ``{"n": int, "recall": {k: float}, "complete": {k: float}}``.
+    Args:
+        rows: Per-question ranks from :func:`evaluate`.
+        ks: Cutoffs, in chunks, to report at.
+
+    Returns:
+        A dict of the shape ``{"n": int, "recall": {k: float}, "complete": {k: float}}``.
 
     Raises:
         ValueError: If ``rows`` is empty.
@@ -95,7 +135,15 @@ def summarize(rows: Sequence[QuestionRanks], ks: Sequence[int] = KS) -> dict:
 
 
 def summarize_by_type(rows: Sequence[QuestionRanks], ks: Sequence[int] = KS) -> dict[str, dict]:
-    """Return :func:`summarize` for each question type, ordered by type name."""
+    """Return :func:`summarize` for each question type, ordered by type name.
+
+    Args:
+        rows: Per-question ranks from :func:`evaluate`.
+        ks: Cutoffs, in chunks, to report at.
+
+    Returns:
+        A map from question type to its :func:`summarize` result.
+    """
     groups: dict[str, list[QuestionRanks]] = defaultdict(list)
     for row in rows:
         groups[row.question.type].append(row)
@@ -103,7 +151,16 @@ def summarize_by_type(rows: Sequence[QuestionRanks], ks: Sequence[int] = KS) -> 
 
 
 def format_table(overall: dict, by_type: dict[str, dict], ks: Sequence[int] = KS) -> str:
-    """Render the overall and per-type summaries as a text table (mean recall, then complete)."""
+    """Render the overall and per-type summaries as a text table (mean recall, then complete).
+
+    Args:
+        overall: The :func:`summarize` result for all questions.
+        by_type: The :func:`summarize_by_type` result.
+        ks: Cutoffs to show as columns; each must be present in the summaries.
+
+    Returns:
+        The table as a multi-line string with one row per type and a final ``ALL`` row.
+    """
     header = f"{'type':<26}{'n':>5}  " + "".join(f"{f'R@{k}':>8}" for k in ks)
     header += "  " + "".join(f"{f'all@{k}':>8}" for k in ks)
     lines = [header]
