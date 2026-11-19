@@ -11,9 +11,9 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field, StringConstraints
 
-from techrag.generate import LLM_MODEL, OLLAMA_URL, answer_from, ollama_chat
-from techrag.ingest import EMBEDDING_MODEL, INDEX_DIR
-from techrag.retrieve import Mode, Result, Retriever
+from techrag.core.generate import LLM_MODEL, OLLAMA_URL, answer_from, ollama_chat
+from techrag.core.ingest import EMBEDDING_MODEL, INDEX_DIR
+from techrag.core.retrieve import Mode, Result, Retriever
 
 Query = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
@@ -67,7 +67,7 @@ def create_app(
 
     ``retriever`` is loaded once by the caller and shared by every request, so the index and
     embedding model are not reloaded per call. ``chat`` takes the chat messages and returns the
-    model's reply, as in :func:`techrag.generate.answer_from`.
+    model's reply, as in :func:`techrag.core.generate.answer_from`.
 
     Args:
         retriever: Loaded index used by ``/search``, ``/ask`` and ``/healthz``.

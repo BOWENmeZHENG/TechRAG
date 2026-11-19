@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from techrag.agent import (
+from techrag.benchmarks.bench import BenchQuestion
+from techrag.core.retrieve import Result
+from techrag.reasoning.agent import (
     FINALIZE_PROMPT,
     SYSTEM_PROMPT,
     DocStore,
@@ -16,8 +18,6 @@ from techrag.agent import (
     run_agent,
     run_question,
 )
-from techrag.bench import BenchQuestion
-from techrag.retrieve import Result
 
 
 @pytest.fixture

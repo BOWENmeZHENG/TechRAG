@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
-from techrag.ingest import EMBEDDING_MODEL, INDEX_DIR
-from techrag.retrieve import Mode, Result, retrieve
+from techrag.core.ingest import EMBEDDING_MODEL, INDEX_DIR
+from techrag.core.retrieve import Mode, Result, retrieve
 
 LLM_MODEL = "llama3.2:3b"
 OLLAMA_URL = "http://localhost:11434"
@@ -143,7 +143,7 @@ def answer(
         The model's reply and the chunks it was given.
 
     Raises:
-        ValueError, FileNotFoundError: As for :func:`techrag.retrieve.retrieve`.
+        ValueError, FileNotFoundError: As for :func:`techrag.core.retrieve.retrieve`.
         OSError, ValueError: If ``chat`` fails (the default does on an unreachable server).
     """
     results = retrieve(query, k, index_dir, embedding_model, mode)

@@ -13,7 +13,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
 
-from techrag.baseline import Record, load_records
+from techrag.reasoning.baseline import Record, load_records
 
 Pair = tuple[Record, Record]
 

@@ -2,8 +2,8 @@
 
 A question is answered from its ``expected_doc_ids``. Retrieval returns chunks, so a chunk
 counts toward a document when its ``source`` maps to that document's id (see
-:func:`techrag.bench.doc_id_of`). Recall is measured at several cutoffs ``k`` over *chunks*,
-because that is how many passages an answering model gets to read.
+:func:`techrag.benchmarks.bench.doc_id_of`). Recall is measured at several cutoffs ``k`` over
+*chunks*, because that is how many passages an answering model gets to read.
 
 Questions with no expected documents (the unanswerable and high-level types) have nothing to
 retrieve, so they are skipped.
@@ -18,9 +18,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
-from techrag.bench import SUBSET_DIR, BenchQuestion, doc_id_of, read_questions
-from techrag.ingest import EMBEDDING_MODEL
-from techrag.retrieve import Mode, Result, Retriever
+from techrag.benchmarks.bench import SUBSET_DIR, BenchQuestion, doc_id_of, read_questions
+from techrag.core.ingest import EMBEDDING_MODEL
+from techrag.core.retrieve import Mode, Result, Retriever
 
 KS = (5, 10, 20, 50, 100)
 INDEX_DIR = Path(".index/dev")

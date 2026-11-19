@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from techrag import generate
-from techrag.generate import (
+from techrag.core import generate
+from techrag.core.generate import (
     SYSTEM_PROMPT,
     Answer,
     answer,
@@ -15,7 +15,7 @@ from techrag.generate import (
     main,
     ollama_chat,
 )
-from techrag.retrieve import Result
+from techrag.core.retrieve import Result
 
 RESULTS = [
     Result(Path("a.md"), "alpha text", 0.9),

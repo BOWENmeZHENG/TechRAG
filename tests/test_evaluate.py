@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from techrag import evaluate as evaluate_module
-from techrag.evaluate import Question, evaluate, first_relevant_rank, load_questions, main
-from techrag.retrieve import Result
+from techrag.core.retrieve import Result
+from techrag.eval import evaluate as evaluate_module
+from techrag.eval.evaluate import Question, evaluate, first_relevant_rank, load_questions, main
 
 QUESTION = Question("q", Path("a.md"), "chain rule")
 

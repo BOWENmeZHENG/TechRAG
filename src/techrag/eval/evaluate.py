@@ -9,9 +9,9 @@ from functools import partial
 from pathlib import Path
 from typing import get_args
 
-from techrag.ingest import EMBEDDING_MODEL, INDEX_DIR
-from techrag.metrics import hit_at_k, mean_reciprocal_rank
-from techrag.retrieve import Mode, Result, retrieve
+from techrag.core.ingest import EMBEDDING_MODEL, INDEX_DIR
+from techrag.core.retrieve import Mode, Result, retrieve
+from techrag.eval.metrics import hit_at_k, mean_reciprocal_rank
 
 QUESTIONS_PATH = Path("eval/questions.jsonl")
 RESULTS_PATH = Path("eval/results.json")
@@ -28,7 +28,7 @@ class Question:
     """
 
     query: str
-    source: Path  # relative to the data dir, like ``techrag.retrieve.Result.source``
+    source: Path  # relative to the data dir, like ``techrag.core.retrieve.Result.source``
     evidence: str  # text a retrieved chunk must contain to count as answering the query
 
 
@@ -108,9 +108,9 @@ def evaluate(
 ) -> list[int | None]:
     """Return, for each question, the rank of its first relevant result among the top ``k``.
 
-    The ranks are in question order and feed ``techrag.metrics``; ``None`` marks a question
+    The ranks are in question order and feed ``techrag.eval.metrics``; ``None`` marks a question
     with no relevant result in the top ``k``. ``retriever`` takes a query and ``k`` and returns
-    results best first; it defaults to :func:`techrag.retrieve.retrieve` on the default index.
+    results best first; it defaults to :func:`techrag.core.retrieve.retrieve` on the default index.
 
     Args:
         questions: Questions to evaluate.

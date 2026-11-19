@@ -38,7 +38,7 @@ class BenchQuestion:
         expected_doc_ids: Ids of the documents that answer it; empty for unanswerable and
             high-level questions.
         gold_answer: The reference answer.
-        answer_facts: Checklist of facts an answer must satisfy; see :mod:`techrag.judge`.
+        answer_facts: Checklist of facts an answer must satisfy; see :mod:`techrag.eval.judge`.
     """
 
     id: str

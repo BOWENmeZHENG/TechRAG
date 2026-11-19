@@ -1,6 +1,6 @@
 import pytest
 
-from techrag.metrics import hit_at_k, mean_reciprocal_rank
+from techrag.eval.metrics import hit_at_k, mean_reciprocal_rank
 
 RANKS = [1, 2, None, 4]
 

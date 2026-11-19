@@ -3,7 +3,7 @@
 Instead of retrieving once, the model decides what to look for: it calls ``search`` to find
 passages and ``read_doc`` to read a whole document, as often as it needs within a step budget,
 then answers (or says it cannot). Answers are graded and logged exactly like the single-shot
-baseline's (see :mod:`techrag.baseline`), so the two are directly comparable.
+baseline's (see :mod:`techrag.reasoning.baseline`), so the two are directly comparable.
 
 The loop is independent of Ollama: it talks to the model through an :data:`AgentChat` function,
 which :func:`ollama_agent_chat` provides.
@@ -20,13 +20,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
-from techrag.baseline import Record, grade, print_report, run_logged
-from techrag.bench import SUBSET_DIR, BenchQuestion, doc_id_of, read_questions, sample_questions
-from techrag.generate import OLLAMA_URL
-from techrag.ingest import EMBEDDING_MODEL
-from techrag.judge import JUDGE_MODEL, NUM_CTX, Chat, ollama_judge
-from techrag.recall import INDEX_DIR
-from techrag.retrieve import Mode, Result, Retriever
+from techrag.benchmarks.bench import (
+    SUBSET_DIR,
+    BenchQuestion,
+    doc_id_of,
+    read_questions,
+    sample_questions,
+)
+from techrag.core.generate import OLLAMA_URL
+from techrag.core.ingest import EMBEDDING_MODEL
+from techrag.core.retrieve import Mode, Result, Retriever
+from techrag.eval.judge import JUDGE_MODEL, NUM_CTX, Chat, ollama_judge
+from techrag.eval.recall import INDEX_DIR
+from techrag.reasoning.baseline import Record, grade, print_report, run_logged
 
 AGENT_MODEL = "qwen3.5:9b"
 RESULTS_PATH = Path("eval/agent.jsonl")

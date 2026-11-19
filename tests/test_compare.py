@@ -2,10 +2,10 @@ import math
 
 import pytest
 
-from techrag.baseline import Record
-from techrag.bench import BenchQuestion, sample_questions
-from techrag.compare import bootstrap_ci, cost, format_report, paired, summarize_by_type
-from techrag.judge import Verdict
+from techrag.benchmarks.bench import BenchQuestion, sample_questions
+from techrag.eval.judge import Verdict
+from techrag.reasoning.baseline import Record
+from techrag.reasoning.compare import bootstrap_ci, cost, format_report, paired, summarize_by_type
 
 
 def _rec(qid: str, met: bool | None, qtype: str = "basic", seconds: float = 1.0, steps: int = 0):

@@ -28,8 +28,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from techrag.bench import SUBSET_DIR, BenchQuestion, read_questions
-from techrag.generate import OLLAMA_URL, ollama_chat
+from techrag.benchmarks.bench import SUBSET_DIR, BenchQuestion, read_questions
+from techrag.core.generate import OLLAMA_URL, ollama_chat
 
 JUDGE_MODEL = "qwen3.5:9b"
 # Room for the prompt and a verdict with one entry per fact: the longest question has 46 facts,

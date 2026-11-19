@@ -6,8 +6,8 @@ import faiss
 import numpy as np
 import pytest
 
-from techrag import ingest
-from techrag.ingest import Chunk, Document, _embed, chunk, embed_and_store, load_documents
+from techrag.core import ingest
+from techrag.core.ingest import Chunk, Document, _embed, chunk, embed_and_store, load_documents
 
 
 def test_loads_markdown_recursively_in_sorted_order(tmp_path: Path) -> None:

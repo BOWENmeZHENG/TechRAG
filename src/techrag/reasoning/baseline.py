@@ -1,7 +1,7 @@
 """Single-shot RAG baseline on the EnterpriseRAG-Bench questions of a subset.
 
 For each question the baseline retrieves the top ``k`` chunks once, has an Ollama model answer
-from them, and grades the answer with :mod:`techrag.judge`. It is the number the agentic search
+from them, and grades the answer with :mod:`techrag.eval.judge`. It is the number the agentic search
 loop has to beat, and the per-type breakdown shows where single-shot retrieval falls short.
 
 Every graded question is appended to a JSON Lines file as soon as it finishes, so an interrupted
@@ -19,12 +19,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
-from techrag.bench import SUBSET_DIR, BenchQuestion, doc_id_of, read_questions, sample_questions
-from techrag.generate import OLLAMA_URL, answer_from, ollama_chat
-from techrag.ingest import EMBEDDING_MODEL
-from techrag.judge import JUDGE_MODEL, NUM_CTX, Chat, Verdict, judge, ollama_judge
-from techrag.recall import INDEX_DIR, gold_doc_ranks
-from techrag.retrieve import Mode, Result, Retriever
+from techrag.benchmarks.bench import (
+    SUBSET_DIR,
+    BenchQuestion,
+    doc_id_of,
+    read_questions,
+    sample_questions,
+)
+from techrag.core.generate import OLLAMA_URL, answer_from, ollama_chat
+from techrag.core.ingest import EMBEDDING_MODEL
+from techrag.core.retrieve import Mode, Result, Retriever
+from techrag.eval.judge import JUDGE_MODEL, NUM_CTX, Chat, Verdict, judge, ollama_judge
+from techrag.eval.recall import INDEX_DIR, gold_doc_ranks
 
 ANSWER_MODEL = "qwen3.5:9b"
 RESULTS_PATH = Path("eval/baseline.jsonl")

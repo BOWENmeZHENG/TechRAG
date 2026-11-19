@@ -3,8 +3,8 @@ from collections.abc import Sequence
 
 import pytest
 
-from techrag.bench import BenchQuestion
-from techrag.judge import (
+from techrag.benchmarks.bench import BenchQuestion
+from techrag.eval.judge import (
     ABSTAIN,
     Verdict,
     build_messages,
