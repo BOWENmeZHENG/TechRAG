@@ -1,4 +1,4 @@
-"""Answer questions about the technical documentation with a local Ollama model."""
+"""Answer questions about the indexed documentation with a local Ollama model."""
 
 import argparse
 import json

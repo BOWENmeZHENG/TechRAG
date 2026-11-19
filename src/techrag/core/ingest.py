@@ -1,4 +1,4 @@
-"""Ingest technical documentation into the TechRAG index."""
+"""Ingest documentation into the TechRAG index."""
 
 import argparse
 import json

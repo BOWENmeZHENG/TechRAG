@@ -1,4 +1,4 @@
-"""Retrieve the chunks of technical documentation most relevant to a query."""
+"""Retrieve the chunks of documentation most relevant to a query."""
 
 import argparse
 import json
