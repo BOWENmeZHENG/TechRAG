@@ -13,10 +13,18 @@ from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR, LLM_MODEL, OLLAMA_
 from techrag.core.retrieve import Mode, Result, retrieve
 
 SYSTEM_PROMPT = (
-    "You answer questions about technical documentation using only the numbered context "
-    "passages provided. Cite the passages you rely on like [1] or [2][3]. If the passages do "
-    "not contain the answer, say that you cannot answer from the documentation instead of "
-    "guessing."
+    "You answer questions about a company's internal documents: Slack threads, emails, Jira and "
+    "Linear tickets, Confluence pages, GitHub issues and pull requests, Google Drive files, "
+    "HubSpot records and meeting transcripts. Use only the numbered context passages provided; "
+    "each is an excerpt of one document and is labelled with its source.\n\n"
+    "Give every specific the question asks for (names, numbers, versions, dates, steps), "
+    "combining facts from several passages when the question needs them, and nothing the "
+    "passages do not support; do not pad the answer with unrelated detail. Cite the passages you "
+    "rely on like [1] or [2][3]. If passages disagree, say so and cite both rather than picking "
+    "one silently.\n\n"
+    "If the passages do not contain the answer, or only part of it, say plainly that you cannot "
+    "fully answer from the available documentation, and state what is missing and what you did "
+    "find. Do not guess."
 )
 
 
