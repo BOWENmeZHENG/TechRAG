@@ -13,7 +13,7 @@ import numpy as np
 from langchain_text_splitters import Language, RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 
-from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR
+from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR, SUBSET_DIR
 from techrag.common.log import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -142,7 +142,7 @@ def embed_and_store(
 def main() -> None:
     """Entry point for the ``techrag-ingest`` command."""
     parser = argparse.ArgumentParser(description="Build the TechRAG index from Markdown docs.")
-    parser.add_argument("data_dir", nargs="?", type=Path, default=Path("data/quicktest"))
+    parser.add_argument("data_dir", nargs="?", type=Path, default=SUBSET_DIR)
     parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
     parser.add_argument("--size", type=int, default=500, help="max characters per chunk")
     parser.add_argument("--overlap", type=int, default=50, help="characters shared by chunks")

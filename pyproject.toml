@@ -22,7 +22,6 @@ dependencies = [
 [project.scripts]
 techrag-ingest = "techrag.core.ingest:main"
 techrag-retrieve = "techrag.core.retrieve:main"
-techrag-eval = "techrag.eval.evaluate:main"
 techrag-ask = "techrag.core.generate:main"
 techrag-serve = "techrag.api:main"
 techrag-subset = "techrag.benchmarks.bench:main"

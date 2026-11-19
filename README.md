@@ -13,8 +13,7 @@ question type.
 
 Underneath is a small [retrieval toolkit](#core-rag-toolkit): Markdown docs are chunked, embedded
 with [`BAAI/bge-small-en-v1.5`](https://huggingface.co/BAAI/bge-small-en-v1.5), stored in FAISS and
-searched densely, by BM25 or both, with a cited-answer command and an HTTP API. The sample corpus
-for it is a handful of PyTorch notes in [data/quicktest/pytorch/](data/quicktest/pytorch/).
+searched densely, by BM25 or both, with a cited-answer command and an HTTP API.
 
 ## Workflow
 
@@ -194,7 +193,8 @@ uv run techrag-compare eval/baseline.jsonl eval/agent.jsonl
 
 ## Core RAG toolkit
 
-The retrieval pieces the experiment above builds on, usable on their own over any Markdown docs.
+The retrieval pieces the experiment above builds on, usable on their own over any Markdown docs
+(the examples below use the dev subset built above).
 
 ### 1. Build the index
 
@@ -202,7 +202,7 @@ The retrieval pieces the experiment above builds on, usable on their own over an
 uv run techrag-ingest [data_dir]
 ```
 
-Reads every `*.md` file under `data_dir` (default `data/quicktest`), chunks it, embeds the chunks, and
+Reads every `*.md` file under `data_dir` (default `data/subsets/dev`), chunks it, embeds the chunks, and
 writes the index to `.index/dev/` (git-ignored). The embedding model is downloaded on first use.
 
 | Option | Default | Description |
@@ -215,7 +215,7 @@ writes the index to `.index/dev/` (git-ignored). The embedding model is download
 ### 2. Search
 
 ```sh
-uv run techrag-retrieve "How does broadcasting work?" -k 3
+uv run techrag-retrieve "What is our parental leave policy?" -k 3
 ```
 
 Prints the `k` most similar chunks (default 5) with their source file and cosine similarity.
@@ -229,7 +229,7 @@ comparable within one query).
 
 ```sh
 ollama pull llama3.2:3b   # once
-uv run techrag-ask "How does broadcasting work?"
+uv run techrag-ask "What is our parental leave policy?"
 ```
 
 Retrieves the top `k` chunks for the question, sends them to a local Ollama model, and prints
@@ -238,11 +238,11 @@ provided passages and cite them like `[1]` or `[2][3]`; the numbers match the so
 the passages don't contain the answer it should say so instead of guessing.
 
 ```
-Tensors are broadcastable when ... [1]
+Parental leave is ... [1]
 
 Sources:
-[1] pytorch/broadcasting.md  (score 0.812)
-[2] pytorch/tensors.md  (score 0.640)
+[1] hr/doc_123.md  (score 0.812)
+[2] hr/doc_456.md  (score 0.640)
 ```
 
 Requires an Ollama server running at `http://localhost:11434`. Errors such as an unreachable
@@ -257,37 +257,7 @@ server, a model that hasn't been pulled, or a missing index exit with an `error:
 | `--embedding-model` | `BAAI/bge-small-en-v1.5` | Must match the ingest model |
 | `--mode` | `dense` | Retrieval method: `dense` (embeddings), `bm25` (keyword match) or `hybrid` (both, fused) |
 
-### 4. Evaluate
-
-```sh
-uv run techrag-eval -k 5
-uv run techrag-eval -k 5 --mode hybrid
-```
-
-Runs every question in [eval/questions.jsonl](eval/questions.jsonl) against the index and
-reports:
-
-- **hit@k**: fraction of questions whose answer appears in the top `k` chunks.
-- **MRR**: mean reciprocal rank of the first relevant chunk (a miss counts as 0).
-
-A retrieved chunk counts as relevant if it comes from the question's `source` file and
-contains its `evidence` text (case and whitespace are ignored). Full per-question output,
-including the retrieved chunks, is written to `eval/results.json` (git-ignored; change it
-with `--output`).
-
-`--mode` selects the retrieval method being measured: `dense` (the default), `bm25` or
-`hybrid`, as in [Search](#2-search). Run once per mode to compare them; the mode used is
-recorded in the results file. `--index-dir` and `--model` must match what was used for ingest.
-
-Each line of the questions file is a JSON object:
-
-```json
-{"query": "When are two tensors 'broadcastable'?", "source": "pytorch/broadcasting.md", "evidence": "dimension sizes must either be equal, one of them is 1, or one of them does not exist"}
-```
-
-`source` is relative to the data directory.
-
-### 5. Serve
+### 4. Serve
 
 ```sh
 uv run techrag-serve
@@ -317,18 +287,18 @@ or inconsistent index exits with an `error: ...` message. Interactive docs are a
 
 ```sh
 curl -s localhost:8000/search -H 'Content-Type: application/json' \
-  -d '{"query": "How does broadcasting work?", "k": 3, "mode": "hybrid"}'
+  -d '{"query": "What is our parental leave policy?", "k": 3, "mode": "hybrid"}'
 ```
 
 ```json
-{"results": [{"source": "pytorch/broadcasting.md", "text": "...", "score": 0.033}]}
+{"results": [{"source": "hr/doc_123.md", "text": "...", "score": 0.033}]}
 ```
 
 `/ask` returns the answer and the chunks it was generated from, numbered by position, so a
 citation like `[2]` refers to `sources[1]`:
 
 ```json
-{"answer": "Tensors are broadcastable when ... [1]", "sources": [{"source": "pytorch/broadcasting.md", "text": "...", "score": 0.812}]}
+{"answer": "Parental leave is ... [1]", "sources": [{"source": "hr/doc_123.md", "text": "...", "score": 0.812}]}
 ```
 
 A blank query, a `k` below 1 or an unknown `mode` returns `422`. If Ollama is unreachable or
@@ -349,7 +319,7 @@ docker compose exec ollama ollama pull llama3.2:3b   # once
 Builds the API image and the web UI image and starts them alongside an Ollama container. The
 web UI is on `http://localhost:8080` (nginx serves the built React app from [web/](web/) and
 forwards `/api/*` to the API), and the API is on `http://localhost:8000` (see
-[Serve](#5-serve) for the endpoints). The image runs
+[Serve](#4-serve) for the endpoints). The image runs
 `techrag-ingest` on [data/quicktest/](data/quicktest/) at build time, so the index and the embedding model are
 baked in and the container needs no network access to the Hugging Face Hub at runtime.
 Rebuild (`docker compose up --build`) after changing the docs in `data/quicktest/`.
@@ -382,11 +352,10 @@ uv run ruff check    # lint
 ## Layout
 
 ```
-data/quicktest/    Small sample corpus to index (committed)
 data/subsets/      Benchmark dev subset built by techrag-subset (git-ignored)
 data/external/     Downloaded datasets, e.g. EnterpriseRAG-Bench (git-ignored)
 docs/              Notes on the EnterpriseRAG-Bench data and question types
-eval/              Labelled questions (and generated results)
+eval/              Generated results and reports
 src/techrag/
   api.py             FastAPI app serving search and ask
   common/
@@ -399,8 +368,6 @@ src/techrag/
   benchmarks/
     bench.py         Load EnterpriseRAG-Bench, build the dev subset, sample questions
   eval/
-    evaluate.py      Run the eval questions
-    metrics.py       hit@k and MRR
     recall.py        Document-level retrieval recall on the benchmark questions
     judge.py         LLM judge (correctness x completeness) and its self-test
   reasoning/
