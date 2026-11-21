@@ -6,8 +6,9 @@ import faiss
 import numpy as np
 import pytest
 
-from techrag.core import ingest
-from techrag.core.ingest import Chunk, Document, _embed, chunk, embed_and_store, load_documents
+from techrag.core import embed as embed_module
+from techrag.core.embed import embed
+from techrag.core.ingest import Chunk, Document, chunk, embed_and_store, load_documents
 
 
 def test_loads_markdown_recursively_in_sorted_order(tmp_path: Path) -> None:
@@ -85,28 +86,28 @@ class FakeSentenceTransformer:
 @pytest.fixture
 def fake_model(monkeypatch: pytest.MonkeyPatch) -> Iterator[type[FakeSentenceTransformer]]:
     FakeSentenceTransformer.instances = []
-    monkeypatch.setattr(ingest, "SentenceTransformer", FakeSentenceTransformer)
-    ingest._load_model.cache_clear()  # don't reuse a model cached by another test
+    monkeypatch.setattr(embed_module, "SentenceTransformer", FakeSentenceTransformer)
+    embed_module.load_model.cache_clear()  # don't reuse a model cached by another test
     yield FakeSentenceTransformer
-    ingest._load_model.cache_clear()  # don't leak the fake into other tests
+    embed_module.load_model.cache_clear()  # don't leak the fake into other tests
 
 
 def test_embed_returns_one_float32_row_per_chunk(fake_model) -> None:
-    vectors = _embed(["a", "b", "c"], "any-model")
+    vectors = embed(["a", "b", "c"], "any-model")
 
     assert vectors.shape == (3, fake_model.dim)
     assert vectors.dtype == np.float32
 
 
 def test_embed_loads_each_model_once(fake_model) -> None:
-    _embed(["a"], "my-model")
-    _embed(["b"], "my-model")
+    embed(["a"], "my-model")
+    embed(["b"], "my-model")
 
     assert len(fake_model.instances) == 1
 
 
 def test_embed_loads_requested_model_and_asks_for_numpy_normalized(fake_model) -> None:
-    _embed(["a"], "my-model")
+    embed(["a"], "my-model")
 
     (model,) = fake_model.instances
     assert model.model_name == "my-model"

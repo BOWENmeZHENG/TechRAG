@@ -141,7 +141,7 @@ function App() {
         <textarea
           id="query"
           rows={2}
-          placeholder="How does broadcasting work?"
+          placeholder="What is our parental leave policy?"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {

@@ -3,7 +3,7 @@
 Instead of retrieving once, the model decides what to look for: it calls ``search`` to find
 passages and ``read_doc`` to read a whole document, as often as it needs within a step budget,
 then answers (or says it cannot). Answers are graded and logged exactly like the single-shot
-baseline's (see :mod:`techrag.reasoning.baseline`), so the two are directly comparable.
+baseline's (see :mod:`techrag.reasoning.harness`), so the two are directly comparable.
 
 The loop is independent of Ollama: it talks to the model through an :data:`AgentChat` function,
 which :func:`ollama_agent_chat` provides.
@@ -22,16 +22,17 @@ from typing import get_args
 
 from techrag.benchmarks.bench import BenchQuestion, doc_id_of, read_questions, sample_questions
 from techrag.common.config import (
-    DEV_INDEX_DIR,
     EMBEDDING_MODEL,
+    INDEX_DIR,
     JUDGE_MODEL,
     NUM_CTX,
     OLLAMA_URL,
     SUBSET_DIR,
 )
+from techrag.common.log import setup_logging
 from techrag.core.retrieve import Mode, Result, Retriever
 from techrag.eval.judge import Chat, ollama_judge
-from techrag.reasoning.baseline import Record, grade, print_report, run_logged
+from techrag.reasoning.harness import Record, grade, print_report, run_logged
 
 AGENT_MODEL = "qwen3.5:9b"
 RESULTS_PATH = Path("eval/agent.jsonl")
@@ -574,7 +575,7 @@ def main() -> None:
     """Entry point for the ``techrag-agent`` command."""
     parser = argparse.ArgumentParser(description="Run the agentic search loop on the benchmark.")
     parser.add_argument("--subset", type=Path, default=SUBSET_DIR, help="subset to search")
-    parser.add_argument("--index-dir", type=Path, default=DEV_INDEX_DIR)
+    parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
     parser.add_argument("--embedding-model", default=EMBEDDING_MODEL, help="must match ingest")
     parser.add_argument("--mode", choices=get_args(Mode), default="hybrid", help="ranking method")
     parser.add_argument("--llm", default=AGENT_MODEL, help="Ollama model that does the research")
@@ -589,6 +590,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=RESULTS_PATH, help="JSON Lines results")
     parser.add_argument("--fresh", action="store_true", help="discard earlier results first")
     args = parser.parse_args()
+    setup_logging()
 
     try:
         questions = read_questions(args.subset / "questions.jsonl")

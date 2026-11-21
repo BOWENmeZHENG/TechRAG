@@ -1,18 +1,20 @@
-"""Ingest technical documentation into the TechRAG index."""
+"""Ingest documentation into the TechRAG index."""
 
 import argparse
 import json
+import logging
 import sys
 from dataclasses import dataclass
-from functools import cache
 from pathlib import Path
 
 import faiss
-import numpy as np
 from langchain_text_splitters import Language, RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
 
-from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR
+from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR, SUBSET_DIR
+from techrag.common.log import setup_logging
+from techrag.core.embed import embed
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -78,33 +80,6 @@ def chunk(text: str, size: int = 500, overlap: int = 50) -> list[str]:
     return splitter.split_text(text)
 
 
-@cache
-def _load_model(model_name: str) -> SentenceTransformer:
-    """Load the embedding model once per process, so repeated queries do not reload it.
-
-    Args:
-        model_name: sentence-transformers model name or path.
-
-    Returns:
-        The loaded model, cached per ``model_name``.
-    """
-    return SentenceTransformer(model_name)
-
-
-def _embed(chunks: list[str], model_name: str) -> np.ndarray:
-    """Return L2-normalized float32 embeddings for ``chunks``, one row per chunk.
-
-    Args:
-        chunks: Texts to embed.
-        model_name: sentence-transformers model to embed with.
-
-    Returns:
-        An array of shape ``(len(chunks), embedding_dim)``.
-    """
-    model = _load_model(model_name)
-    return model.encode(chunks, normalize_embeddings=True, convert_to_numpy=True).astype(np.float32)
-
-
 def embed_and_store(
     chunks: list[Chunk], index_dir: Path = INDEX_DIR, model_name: str = EMBEDDING_MODEL
 ) -> None:
@@ -126,7 +101,7 @@ def embed_and_store(
     """
     if not chunks:
         raise ValueError("No chunks to embed")
-    vectors = _embed([c.text for c in chunks], model_name)
+    vectors = embed([c.text for c in chunks], model_name)
     index = faiss.IndexFlatIP(vectors.shape[1])
     index.add(vectors)
     index_dir.mkdir(parents=True, exist_ok=True)
@@ -138,12 +113,13 @@ def embed_and_store(
 def main() -> None:
     """Entry point for the ``techrag-ingest`` command."""
     parser = argparse.ArgumentParser(description="Build the TechRAG index from Markdown docs.")
-    parser.add_argument("data_dir", nargs="?", type=Path, default=Path("data/quicktest"))
+    parser.add_argument("data_dir", nargs="?", type=Path, default=SUBSET_DIR)
     parser.add_argument("--index-dir", type=Path, default=INDEX_DIR)
     parser.add_argument("--size", type=int, default=500, help="max characters per chunk")
     parser.add_argument("--overlap", type=int, default=50, help="characters shared by chunks")
     parser.add_argument("--model", default=EMBEDDING_MODEL, help="sentence-transformers model")
     args = parser.parse_args()
+    setup_logging()
 
     try:
         documents = load_documents(args.data_dir)
@@ -155,7 +131,9 @@ def main() -> None:
         embed_and_store(chunks, args.index_dir, args.model)
     except (FileNotFoundError, ValueError) as e:
         sys.exit(f"error: {e}")
-    print(f"Indexed {len(chunks)} chunks from {len(documents)} documents into {args.index_dir}")
+    logger.info(
+        "Indexed %d chunks from %d documents into %s", len(chunks), len(documents), args.index_dir
+    )
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
 
 COPY data/quicktest ./data/quicktest
-RUN .venv/bin/techrag-ingest data/quicktest --index-dir .index
+RUN .venv/bin/techrag-ingest data/quicktest
 
 # Runtime stage: only the virtualenv, the index and the cached model.
 FROM python:3.12-slim

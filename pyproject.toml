@@ -5,7 +5,7 @@ build-backend = "uv_build"
 [project]
 name = "techrag"
 version = "0.1.0"
-description = "Retrieval-augmented generation over technical documentation."
+description = "Retrieval-augmented generation over documentation."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "Bowen Zheng", email = "bowenzheng01@gmail.com" }]
@@ -22,7 +22,6 @@ dependencies = [
 [project.scripts]
 techrag-ingest = "techrag.core.ingest:main"
 techrag-retrieve = "techrag.core.retrieve:main"
-techrag-eval = "techrag.eval.evaluate:main"
 techrag-ask = "techrag.core.generate:main"
 techrag-serve = "techrag.api:main"
 techrag-subset = "techrag.benchmarks.bench:main"

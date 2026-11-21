@@ -4,9 +4,7 @@ from pathlib import Path
 
 # Retrieval
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
-INDEX_DIR = Path(".index")
-# Index over the benchmark dev subset, used by recall and the reasoning experiments.
-DEV_INDEX_DIR = Path(".index/dev")
+INDEX_DIR = Path(".index/dev")
 
 # Benchmark
 SUBSET_DIR = Path("data/subsets/dev")
