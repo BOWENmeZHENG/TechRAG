@@ -4,8 +4,11 @@ A reasoning-RAG project: it tests whether a **reasoning LLM that decides for its
 search for and which documents to read** answers hard enterprise questions better than
 single-shot retrieval. The agent is an off-the-shelf reasoning model (`qwen3.5:9b` on local
 [Ollama](https://ollama.com)) in a search loop with `search` and `read_doc` tools, not a trained
-model. It is prompted to plan each lookup, read whole documents instead of trusting short excerpts,
-flag documents that disagree, and say so when the evidence is missing. It is measured on
+model. The model decides when to search, which documents to read and when it has enough evidence;
+a small [bounded loop](#how-the-agent-works) (no agent framework) only runs the tools and enforces
+step, context and duplicate-call limits, then forces an answer if the budget runs out. It is
+prompted to plan each lookup, read whole documents instead of trusting short excerpts, flag
+documents that disagree, and say so when the evidence is missing. It is measured on
 [EnterpriseRAG-Bench](#reasoning-rag-on-enterpriserag-bench) (about 512k enterprise documents, 500
 questions across ten types) against a single-shot RAG baseline, with an LLM judge for grading.
 [docs/enterprise-rag-bench.md](docs/enterprise-rag-bench.md) explains the dataset and each
@@ -20,21 +23,23 @@ searched densely, by BM25 or both, with a cited-answer command and an HTTP API.
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "22px"}, "flowchart": {"nodeSpacing": 40, "rankSpacing": 50, "padding": 14}}}%%
 flowchart LR
-    Q["Benchmark question"]
+    Q["Question"]
 
     subgraph BASE["Baseline: single-shot RAG"]
         direction TB
-        B1["Retrieve top-k chunks once<br/>(hybrid: dense + BM25)"] --> B2["LLM answers<br/>from those chunks"]
+        B1["Retrieve top-k chunks once"] --> B2["LLM answers<br/>from those chunks"]
     end
 
     subgraph AGENT["Agent: reasoning LLM in a search loop"]
         direction TB
-        A1["Reason: what is still missing?"] --> A2{"Call a tool"}
+        A1["Thought: plan the next step"] --> A2{"Call a tool<br/>(max 4 per turn,<br/>exact repeats skipped)"}
         A2 -->|"search(query)"| A3["Hits: doc id, title, excerpt"]
         A2 -->|"read_doc(doc_id)"| A4["Full document, page by page"]
         A3 --> A1
         A4 --> A1
-        A1 -->|"enough evidence, or forced to at the step / context limit"| A5["Final answer, or<br/>'cannot fully answer'"]
+        A1 -->|"replies without a tool call"| A5["Final answer, or<br/>'cannot fully answer'"]
+        A1 -.->|"8 turns used, ~37k-char context,<br/>or empty reply"| A6["Forced answer<br/>(tools off)"]
+        A6 --> A5
     end
 
     IDX[("Index of the dev subset<br/>723 gold docs + seeded distractors")]
@@ -45,7 +50,7 @@ flowchart LR
     Q --> B1
     Q --> A1
     B2 --> J
-    A5 --> J["LLM judge<br/>checks each answer fact<br/>score = correctness x completeness"]
+    A5 -->|"answer, stop reason,<br/>docs seen, trace"| J["LLM judge<br/>checks each answer fact<br/>score = correctness x completeness"]
     J --> C["techrag-compare<br/>paired scores, bootstrap CI, cost"]
 ```
 
@@ -53,23 +58,23 @@ flowchart LR
 
 On a dev sample of 80 questions (8 per type, seed 0) over a 20,723-document subset (723 gold
 documents plus 20,000 distractors, 280k chunks), the reasoning agent scored **0.706** against
-the baseline's **0.458**: +0.248, 95% bootstrap CI +0.145 to +0.349. It costs about three times as
-much per question (28.6 s and 3.9 model turns on average, against 10.1 s and a single model
-call).
+the baseline's **0.454**: +0.252, 95% bootstrap CI +0.149 to +0.353. It costs about twice as
+much time per question (30.6 s and 3.9 model turns on average, against 13.3 s and a single model
+call), and about 14,800 tokens.
 
 | Question type | Baseline | Agent | Δ |
 | --- | --- | --- | --- |
-| constrained | 0.286 | 0.857 | +0.571 |
+| constrained | 0.269 | 0.857 | +0.588 |
 | intra_document_reasoning | 0.527 | 0.969 | +0.442 |
-| conflicting_info | 0.250 | 0.678 | +0.428 |
 | high_level | 0.325 | 0.658 | +0.333 |
-| miscellaneous | 0.646 | 0.896 | +0.250 |
-| project_related | 0.412 | 0.634 | +0.221 |
-| completeness | 0.241 | 0.452 | +0.211 |
-| semantic | 0.125 | 0.250 | +0.125 |
+| miscellaneous | 0.562 | 0.896 | +0.333 |
+| project_related | 0.333 | 0.634 | +0.301 |
+| conflicting_info | 0.471 | 0.678 | +0.207 |
+| completeness | 0.260 | 0.452 | +0.192 |
+| semantic | 0.104 | 0.250 | +0.146 |
 | info_not_found | 1.000 | 1.000 | 0 |
-| basic | 0.771 | 0.667 | −0.104 |
-| **All (80)** | **0.458** | **0.706** | **+0.248** |
+| basic | 0.688 | 0.667 | −0.021 |
+| **All (80)** | **0.454** | **0.706** | **+0.252** |
 
 Scores are the judge's correctness × completeness, 0 to 1. Questions that combine or check
 evidence (constraints, conflicting sources, reasoning inside a document) gain most; simple
@@ -186,6 +191,44 @@ uv run techrag-agent --per-type 8
 
 Each question is appended to the results file as soon as it is graded, so an interrupted run
 resumes where it stopped, and questions that errored are retried on the next run.
+
+#### How the agent works
+
+[agent.py](src/techrag/reasoning/agent.py) is a bounded loop with no agent framework: the model
+decides what to search for, what to read and when it has enough; Python only runs the tools and
+enforces limits. The loop talks to the model through a plain `AgentChat` function, so it can be
+tested or pointed at another backend without Ollama.
+
+| Tool | Returns |
+| --- | --- |
+| `search(query, k=8)` | Up to `k` (1–15) documents as `[doc_id] source - title` plus a ~700-character excerpt, from hybrid chunk search grouped by document |
+| `read_doc(doc_id, start=0)` | A 6,000-character page of the document, with a footer giving the next `start` if it continues |
+
+Each turn the model either calls tools (at most 4 are run per turn) or replies in plain prose,
+which is taken as the final answer. Tool results are appended to the conversation and the loop
+repeats. A bad argument, unknown tool or unknown document id comes back to the model as text, so
+it can correct itself instead of crashing the run. An exact repeat of an earlier call is not run;
+the model is told to try a different query.
+
+The run ends in one of four ways, recorded as `stop` in each result:
+
+| `stop` | Meaning |
+| --- | --- |
+| `answered` | The model replied without calling a tool |
+| `max_steps` | The step budget (`--max-steps`, default 8) ran out |
+| `context` | The prompt passed about 37k characters (75% of the 16k-token window at 3 characters per token). Ollama silently drops the start of an overlong prompt, which would lose the question |
+| `empty` | The model replied with neither text nor a tool call |
+
+Any stop but `answered` triggers one last turn with tools disabled and an instruction to answer
+from what was found, or to say what is missing. The result keeps the answer, turns, tokens, the
+documents the model was shown and a per-call trace (the model's one-line thought, tool,
+arguments, documents shown). The judge grades it the same way as the baseline, and the share of
+gold documents the agent saw (`gold_found`) is recorded, which is how the finding above about
+retrieval being the bottleneck was measured.
+
+Sampling is greedy (`temperature=0`) for repeatability, and `think` is off by default because the
+agent already writes a line of reasoning before each call and thinking makes every step several
+times slower.
 
 ### Compare them
 
