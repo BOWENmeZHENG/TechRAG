@@ -56,32 +56,43 @@ flowchart LR
 
 ## Results
 
-On a dev sample of 80 questions (8 per type, seed 0) over a 20,723-document subset (723 gold
-documents plus 20,000 distractors, 280k chunks), the reasoning agent scored **0.706** against
-the baseline's **0.454**: +0.252, 95% bootstrap CI +0.149 to +0.353. It costs about twice as
-much time per question (30.6 s and 3.9 model turns on average, against 13.3 s and a single model
-call), and about 14,800 tokens.
+On all 500 questions over a 2,723-document subset (723 gold documents plus 2,000 distractors,
+`data/subsets/dev2k`), the reasoning agent scored **0.745** against the baseline's **0.529**:
++0.215, 95% bootstrap CI +0.176 to +0.256. It costs about 1.6 times as much time per question
+(23.4 s and 3.5 model turns on average, against 15.0 s and a single model call), and about
+10,800 tokens. 
 
-| Question type | Baseline | Agent | Δ |
-| --- | --- | --- | --- |
-| constrained | 0.269 | 0.857 | +0.588 |
-| intra_document_reasoning | 0.527 | 0.969 | +0.442 |
-| high_level | 0.325 | 0.658 | +0.333 |
-| miscellaneous | 0.562 | 0.896 | +0.333 |
-| project_related | 0.333 | 0.634 | +0.301 |
-| conflicting_info | 0.471 | 0.678 | +0.207 |
-| completeness | 0.260 | 0.452 | +0.192 |
-| semantic | 0.104 | 0.250 | +0.146 |
-| info_not_found | 1.000 | 1.000 | 0 |
-| basic | 0.688 | 0.667 | −0.021 |
-| **All (80)** | **0.454** | **0.706** | **+0.252** |
+| Question type | n | Baseline | Agent | Δ |
+| --- | ---: | ---: | ---: | ---: |
+| constrained | 30 | 0.354 | 0.683 | +0.330 |
+| project_related | 40 | 0.262 | 0.586 | +0.324 |
+| intra_document_reasoning | 40 | 0.687 | 0.925 | +0.238 |
+| completeness | 20 | 0.342 | 0.572 | +0.230 |
+| semantic | 125 | 0.375 | 0.598 | +0.223 |
+| basic | 175 | 0.628 | 0.848 | +0.220 |
+| conflicting_info | 20 | 0.613 | 0.736 | +0.123 |
+| miscellaneous | 20 | 0.796 | 0.898 | +0.102 |
+| info_not_found | 20 | 1.000 | 1.000 | 0 |
+| high_level | 10 | 0.432 | 0.408 | −0.023 |
+| **All** | **500** | **0.529** | **0.745** | **+0.215** |
 
-Scores are the judge's correctness × completeness, 0 to 1. Questions that combine or check
-evidence (constraints, conflicting sources, reasoning inside a document) gain most; simple
-lookups gain nothing or lose a little. Retrieval is still the bottleneck: for the 15 of 80
-questions where the agent never saw some of the gold documents, it scores 0.21, against 0.82 when
-it saw all of them. With 8 questions per type the per-type rows are noisy; the overall interval
-is the reliable figure. It has not been run on all 500 questions.
+The agent wins on every type except `high_level` (10 questions, a difference well inside the
+noise) and `info_not_found`, where both score 1.000. Even `basic` and `semantic` lookups improve
+(+0.22 each), and with 175 and 125 questions those rows are reliable. The agent answered on its own for 480 of 500 questions; 13 hit the context limit and 7
+the step limit. Retrieval is still the bottleneck: of the 470 questions that have gold
+documents, the agent saw all of them for 395 (score 0.82) and missed some for 75 (0.31). The
+baseline shows the same split (0.59 against 0.13 for 391 and 79 questions). Both runs took
+several hours on a laptop: about 3.3 h for the agent and 2.1 h for the baseline.
+
+To reproduce:
+
+```sh
+uv run techrag-subset --out-dir data/subsets/dev2k --distractors 2000
+uv run techrag-ingest data/subsets/dev2k --index-dir .index/dev2k
+uv run techrag-baseline --subset data/subsets/dev2k --index-dir .index/dev2k --output eval/baseline2k_q500.jsonl
+uv run techrag-agent --subset data/subsets/dev2k --index-dir .index/dev2k --output eval/agent2k_q500.jsonl
+uv run techrag-compare eval/baseline2k_q500.jsonl eval/agent2k_q500.jsonl
+```
 
 ## Setup
 
