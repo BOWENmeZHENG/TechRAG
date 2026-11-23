@@ -235,3 +235,7 @@ data/external/*
 !data/external/.gitkeep
 # generated benchmark subsets
 data/subsets/
+# MLflow tracking store
+mlruns/
+mlflow.db
+mlartifacts/
