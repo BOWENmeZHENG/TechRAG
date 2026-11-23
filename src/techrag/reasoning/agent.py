@@ -36,6 +36,7 @@ from techrag.common.config import (
     RunConfig,
 )
 from techrag.common.log import setup_logging
+from techrag.common.tracking import log_results, tracked_eval
 from techrag.core.retrieve import Mode, Result, Retriever
 from techrag.eval.judge import Chat, ollama_judge
 from techrag.reasoning.harness import (
@@ -43,6 +44,7 @@ from techrag.reasoning.harness import (
     data_config,
     grade,
     index_version,
+    load_records,
     print_report,
     run_logged,
     run_metadata,
@@ -604,6 +606,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=RESULTS_PATH, help="JSON Lines results")
     parser.add_argument("--run-name", help="name for the run manifest (default: results file name)")
     parser.add_argument("--fresh", action="store_true", help="discard earlier results first")
+    parser.add_argument("--no-mlflow", action="store_true", help="do not record the run in MLflow")
     args = parser.parse_args()
     setup_logging()
 
@@ -645,12 +648,17 @@ def main() -> None:
 
         chat = ollama_agent_chat(args.llm, args.ollama_url, args.think)
         judge_chat = ollama_judge(args.judge_model, args.ollama_url)
-        records = run_logged(
-            questions,
-            lambda q: run_question(q, chat, make_tools, judge_chat, args.max_steps),
-            args.output,
-            args.fresh,
-        )
+        resumed = not args.fresh and bool(load_records(args.output))
+        with tracked_eval(config, "agent", args.run_name, resumed, not args.no_mlflow) as run:
+            try:
+                records = run_logged(
+                    questions,
+                    lambda q: run_question(q, chat, make_tools, judge_chat, args.max_steps),
+                    args.output,
+                    args.fresh,
+                )
+            finally:  # an interrupted run keeps what it got through
+                log_results(run, questions, args.output, agent=True)
     except (OSError, ValueError) as e:
         sys.exit(f"error: {e}")
     print_report(records)

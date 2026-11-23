@@ -4,11 +4,14 @@ from pathlib import Path
 import mlflow
 import pytest
 
+from techrag.benchmarks.bench import BenchQuestion
 from techrag.common.config import AgentConfig, DataConfig, RetrievalConfig, RunConfig, RunMetadata
 from techrag.common.tracking import (
     EVAL_EXPERIMENT,
+    agent_trace,
     flatten_metrics,
     flatten_params,
+    log_results,
     tracked_eval,
     tracked_run,
 )
@@ -135,3 +138,55 @@ def test_disabled_tracking_writes_nothing(store: str, tmp_path: Path):
         tracker.log_artifact(tmp_path / "x")
         tracker.log_dict({}, "x.json")
     assert not (tmp_path / "mlflow.db").exists()
+
+
+def _question(qid: str) -> BenchQuestion:
+    return BenchQuestion(qid, "basic", "?", "a", (), ())
+
+
+def test_agent_trace_is_keyed_by_question():
+    call = {"step": 1, "thought": "look", "tool": "search", "args": {"q": "x"}, "docs": ["d1"]}
+    trace = agent_trace([_record("a", "basic", [True], steps=2, stop="answered", trace=(call,))])
+    assert trace["a"]["steps"] == 2 and trace["a"]["stop"] == "answered"
+    assert trace["a"]["score"] == 1.0
+    assert trace["a"]["calls"] == [call]
+
+
+def test_results_are_read_back_from_the_file_for_the_runs_questions_only(
+    store: str, tmp_path: Path
+):
+    results = tmp_path / "agent.jsonl"
+    old = _record("old", "basic", [False], steps=1, stop="answered")
+    mine = _record("q1", "basic", [True], steps=2, stop="max_steps", trace=({"step": 1},))
+    results.write_text(old.to_json() + "\n" + mine.to_json() + "\n")
+
+    with tracked_eval(_config(), "agent") as tracker:
+        log_results(tracker, [_question("q1"), _question("unanswered")], results, agent=True)
+
+    (run,) = _runs(store)
+    assert run.data.metrics["n_questions"] == 1
+    assert run.data.metrics["score"] == 1.0
+    assert run.data.metrics["stop/max_steps"] == 1
+    client = mlflow.MlflowClient(store)
+    assert {"agent.jsonl", "agent_trace.json"} <= {
+        a.path for a in client.list_artifacts(run.info.run_id)
+    }
+
+
+def test_baseline_results_log_no_agent_trace(store: str, tmp_path: Path):
+    results = tmp_path / "baseline.jsonl"
+    results.write_text(_record("q1", "basic", [True]).to_json() + "\n")
+    with tracked_eval(_config(), "baseline") as tracker:
+        log_results(tracker, [_question("q1")], results)
+    (run,) = _runs(store)
+    names = {a.path for a in mlflow.MlflowClient(store).list_artifacts(run.info.run_id)}
+    assert "agent_trace.json" not in names and "baseline.jsonl" in names
+
+
+def test_an_unreadable_results_file_does_not_end_the_run(store: str, tmp_path: Path, caplog):
+    results = tmp_path / "bad.jsonl"
+    results.write_text("not json\n")
+    with tracked_eval(_config(), "baseline") as tracker:
+        log_results(tracker, [_question("q1")], results)
+    assert "could not read" in caplog.text
+    assert _runs(store)[0].info.status == "FINISHED"

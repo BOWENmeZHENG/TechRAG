@@ -30,6 +30,7 @@ from techrag.common.config import (
 )
 from techrag.common.log import setup_logging
 from techrag.common.ollama import ollama_chat
+from techrag.common.tracking import log_results, tracked_eval
 from techrag.core.generate import answer_from
 from techrag.core.retrieve import Mode, Result, Retriever
 from techrag.eval.judge import Chat, ollama_judge
@@ -39,6 +40,7 @@ from techrag.reasoning.harness import (
     gold_found,
     grade,
     index_version,
+    load_records,
     print_report,
     run_each,
     run_logged,
@@ -139,6 +141,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=RESULTS_PATH, help="JSON Lines results")
     parser.add_argument("--run-name", help="name for the run manifest (default: results file name)")
     parser.add_argument("--fresh", action="store_true", help="discard earlier results first")
+    parser.add_argument("--no-mlflow", action="store_true", help="do not record the run in MLflow")
     args = parser.parse_args()
     setup_logging()
 
@@ -168,18 +171,23 @@ def main() -> None:
         retriever = Retriever(args.index_dir, args.embedding_model)
         retriever.warm_up()
         judge_chat = ollama_judge(args.judge_model, args.ollama_url)
-        records = run_logged(
-            questions,
-            lambda q: run_question(
-                q,
-                lambda text, k: retriever.search(text, k, args.mode),
-                answer_chat,
-                judge_chat,
-                args.k,
-            ),
-            args.output,
-            args.fresh,
-        )
+        resumed = not args.fresh and bool(load_records(args.output))
+        with tracked_eval(config, "baseline", args.run_name, resumed, not args.no_mlflow) as run:
+            try:
+                records = run_logged(
+                    questions,
+                    lambda q: run_question(
+                        q,
+                        lambda text, k: retriever.search(text, k, args.mode),
+                        answer_chat,
+                        judge_chat,
+                        args.k,
+                    ),
+                    args.output,
+                    args.fresh,
+                )
+            finally:  # an interrupted run keeps what it got through
+                log_results(run, questions, args.output)
     except (OSError, ValueError) as e:
         sys.exit(f"error: {e}")
     print_report(records)

@@ -22,8 +22,9 @@ from pathlib import Path
 from statistics import fmean
 from typing import Any
 
+from techrag.benchmarks.bench import BenchQuestion
 from techrag.common.config import RunConfig
-from techrag.reasoning.harness import Record, summarize, summarize_by
+from techrag.reasoning.harness import Record, load_records, summarize, summarize_by
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +178,62 @@ def flatten_metrics(records: Sequence[Record]) -> dict[str, float]:
             key = f"stop/{_slug(r.stop) or 'unknown'}"
             metrics[key] = metrics.get(key, 0) + 1
     return metrics
+
+
+def agent_trace(records: Sequence[Record]) -> dict[str, dict]:
+    """Return what the agent did on each question, by question id.
+
+    Each entry has the question's type, score, ``steps``, ``tokens``, ``stop`` reason and
+    ``error``, and ``calls``: one item per tool call with its step, the model's ``thought``
+    alongside it, the tool, its arguments, the documents it returned and the reply's size.
+
+    Args:
+        records: The records of an agent run.
+
+    Returns:
+        A map from question id to its trace, in record order.
+    """
+    return {
+        r.question_id: {
+            "question_type": r.question_type,
+            "score": r.score,
+            "steps": r.steps,
+            "tokens": r.tokens,
+            "stop": r.stop,
+            "error": r.error,
+            "calls": list(r.trace),
+        }
+        for r in records
+    }
+
+
+def log_results(
+    tracker: Tracker, questions: Sequence[BenchQuestion], output: Path, agent: bool = False
+) -> None:
+    """Log the outcome of a run from its results file: metrics, the file, and the agent's trace.
+
+    It reads ``output`` instead of taking records, so it also records what an interrupted or
+    failed run got through. Only the records of ``questions`` count, not earlier runs' leftovers.
+    Nothing is logged if tracking is off.
+
+    Args:
+        tracker: The run's tracker.
+        questions: The questions the run was asked to answer.
+        output: The JSON Lines results file.
+        agent: Whether this is an agent run, which also logs ``agent_trace.json``.
+    """
+    if not tracker.enabled:
+        return
+    try:
+        latest = load_records(output)
+    except (OSError, ValueError) as e:
+        logger.warning("mlflow: could not read %s: %s", output, e)
+        return
+    records = [latest[q.id] for q in questions if q.id in latest]
+    tracker.log_metrics(flatten_metrics(records))
+    tracker.log_artifact(output)
+    if agent:
+        tracker.log_dict(agent_trace(records), "agent_trace.json")
 
 
 @contextmanager
