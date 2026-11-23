@@ -42,6 +42,7 @@ from techrag.reasoning.harness import (
     Record,
     data_config,
     grade,
+    index_version,
     print_report,
     run_logged,
     run_metadata,
@@ -611,7 +612,10 @@ def main() -> None:
             metadata=run_metadata(args.run_name or args.output.stem),
             llm=LLMConfig(model_name=args.llm, num_ctx=NUM_CTX),
             retrieval=RetrievalConfig(
-                mode=args.mode, k=SEARCH_DOCS, embedding_model=args.embedding_model
+                mode=args.mode,
+                k=SEARCH_DOCS,
+                embedding_model=args.embedding_model,
+                index_version=index_version(args.index_dir),
             ),
             agent=AgentConfig(max_steps=args.max_steps, think=args.think),
             evaluation=EvaluationConfig(judge_model=args.judge_model),

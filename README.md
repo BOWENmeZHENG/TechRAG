@@ -215,7 +215,7 @@ run before any model loads.
 | Section | Records |
 | --- | --- |
 | `llm` | Model name, temperature, `max_tokens`, context window |
-| `retrieval` | `mode`, `k`, embedding model, `index_version` (not filled in yet) |
+| `retrieval` | `mode`, `k`, embedding model, `index_version` (a SHA-256 of `index.faiss` and `chunks.json`) |
 | `agent` | `max_steps` and `think`. The baseline is one model turn, so it records `max_steps=1` |
 | `evaluation` | Judge model and temperature |
 | `data` | Subset name, a SHA-256 of its `questions.jsonl` and `manifest.json`, and how questions were sampled: `seed`, `sample_size` (`-n`), `per_type`, `question_ids` (`--ids`) |
