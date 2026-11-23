@@ -29,15 +29,6 @@ def _record(qid, qtype, met, gold=1.0, **extra) -> Record:
     return Record(qid, qtype, "a", ("d1",), gold, 2.0, verdict, **extra)
 
 
-@pytest.fixture
-def store(tmp_path: Path, monkeypatch) -> str:
-    """Point MLflow at a throwaway store, so tests never write ``mlflow.db`` in the repo."""
-    uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
-    monkeypatch.setenv("MLFLOW_TRACKING_URI", uri)
-    monkeypatch.chdir(tmp_path)
-    return uri
-
-
 def _runs(store: str, experiment: str = EVAL_EXPERIMENT):
     mlflow.set_tracking_uri(store)
     return mlflow.search_runs(experiment_names=[experiment], output_format="list")
@@ -221,7 +212,12 @@ def test_judge_run_goes_to_its_own_experiment(store: str):
     assert _runs(store) == []  # not mixed in with baseline and agent runs
 
 
-def test_git_tags_describe_the_checkout():
-    tags = git_tags()  # this repository is a git checkout
+def test_git_tags_describe_the_checkout(monkeypatch):
+    monkeypatch.chdir(Path(__file__).resolve().parent)  # inside this repository's checkout
+    tags = git_tags()
     assert len(tags["git_sha"]) == 40
     assert tags["git_dirty"] in {"true", "false"}
+
+
+def test_git_tags_are_empty_outside_a_repository():
+    assert git_tags() == {}  # the autouse fixture runs the test in an empty temporary directory
