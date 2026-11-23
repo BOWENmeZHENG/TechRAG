@@ -33,6 +33,7 @@ from techrag.benchmarks.bench import BenchQuestion, read_questions
 from techrag.common.config import JUDGE_MODEL, NUM_CTX, OLLAMA_URL, SUBSET_DIR
 from techrag.common.log import setup_logging
 from techrag.common.ollama import ollama_chat
+from techrag.common.tracking import JUDGE_EXPERIMENT, git_tags, tracked_run
 
 logger = logging.getLogger(__name__)
 
@@ -404,6 +405,28 @@ def summarize_probes(probes: Sequence[Probe]) -> dict[str, dict[str, float]]:
     }
 
 
+def probe_metrics(probes: Sequence[Probe], failures: Sequence[str]) -> dict[str, float]:
+    """Return how well the judge did on ``probes`` as MLflow metrics.
+
+    These are ``n_probes``, ``n_failures``, and ``mean_abs_error`` and ``within_0.25`` over all
+    probes, then each probe kind's :func:`summarize_probes` figures as ``<kind>/<figure>``.
+
+    Args:
+        probes: Graded probes from :func:`selftest`.
+        failures: Descriptions of the probes that got no usable verdict.
+
+    Returns:
+        A map from metric name to value.
+    """
+    metrics: dict[str, float] = {"n_probes": len(probes), "n_failures": len(failures)}
+    if probes:
+        metrics["mean_abs_error"] = sum(p.error for p in probes) / len(probes)
+        metrics["within_0.25"] = sum(p.error <= 0.25 for p in probes) / len(probes)
+    for kind, figures in summarize_probes(probes).items():
+        metrics.update({f"{kind}/{name}": value for name, value in figures.items()})
+    return metrics
+
+
 def main() -> None:
     """Entry point for the ``techrag-judge`` command."""
     parser = argparse.ArgumentParser(description="Check the answer judge against known answers.")
@@ -414,36 +437,50 @@ def main() -> None:
     parser.add_argument("--ollama-url", default=OLLAMA_URL)
     parser.add_argument("--think", action="store_true", help="let the judge model reason first")
     parser.add_argument("--output", type=Path, default=SELFTEST_PATH, help="JSON report to write")
+    parser.add_argument("--no-mlflow", action="store_true", help="do not record the run in MLflow")
     args = parser.parse_args()
     setup_logging()
 
     try:
         questions = read_questions(args.subset / "questions.jsonl")
         chat = ollama_judge(args.model, args.ollama_url, args.think)
-        probes, failures = selftest(questions, chat, args.n, args.seed)
-        summary = summarize_probes(probes)
-        report = {
-            "model": args.model,
-            "think": args.think,
-            "seed": args.seed,
-            "summary": summary,
-            "failures": failures,
-            "probes": [
-                {
-                    "question_id": p.question_id,
-                    "kind": p.kind,
-                    "expected": p.expected,
-                    "score": p.verdict.score,
-                    "facts_met": list(p.verdict.facts_met),
-                    "contradiction": p.verdict.contradiction,
-                    "reason": p.verdict.reason,
-                    "answer": p.answer,
-                }
-                for p in probes
-            ],
+        params = {
+            "evaluation.judge_model": args.model,
+            "evaluation.think": args.think,
+            "evaluation.num_ctx": NUM_CTX,
+            "selftest.n": args.n,
+            "selftest.seed": args.seed,
+            "data.subset_name": args.subset.resolve().name,
         }
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        with tracked_run(
+            JUDGE_EXPERIMENT, f"judge-{args.model}", params, git_tags(), not args.no_mlflow
+        ) as run:
+            probes, failures = selftest(questions, chat, args.n, args.seed)
+            summary = summarize_probes(probes)
+            report = {
+                "model": args.model,
+                "think": args.think,
+                "seed": args.seed,
+                "summary": summary,
+                "failures": failures,
+                "probes": [
+                    {
+                        "question_id": p.question_id,
+                        "kind": p.kind,
+                        "expected": p.expected,
+                        "score": p.verdict.score,
+                        "facts_met": list(p.verdict.facts_met),
+                        "contradiction": p.verdict.contradiction,
+                        "reason": p.verdict.reason,
+                        "answer": p.answer,
+                    }
+                    for p in probes
+                ],
+            }
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+            run.log_metrics(probe_metrics(probes, failures))
+            run.log_artifact(args.output)
     except (OSError, ValueError) as e:
         sys.exit(f"error: {e}")
 

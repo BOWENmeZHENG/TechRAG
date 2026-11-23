@@ -8,15 +8,15 @@ from techrag.benchmarks.bench import BenchQuestion
 from techrag.common.config import AgentConfig, DataConfig, RetrievalConfig, RunConfig, RunMetadata
 from techrag.common.tracking import (
     EVAL_EXPERIMENT,
-    agent_trace,
-    flatten_metrics,
+    JUDGE_EXPERIMENT,
     flatten_params,
-    log_results,
+    git_tags,
     tracked_eval,
     tracked_run,
 )
-from techrag.eval.judge import Verdict
+from techrag.eval.judge import Probe, Verdict, probe_metrics
 from techrag.reasoning.harness import Record
+from techrag.reasoning.metrics import agent_trace, flatten_metrics, log_results
 
 
 def _config(**overrides) -> RunConfig:
@@ -190,3 +190,38 @@ def test_an_unreadable_results_file_does_not_end_the_run(store: str, tmp_path: P
         log_results(tracker, [_question("q1")], results)
     assert "could not read" in caplog.text
     assert _runs(store)[0].info.status == "FINISHED"
+
+
+def _probe(kind: str, expected: float, met: list[bool]) -> Probe:
+    return Probe("q1", kind, "answer", expected, Verdict(tuple(met), "", ""))
+
+
+def test_judge_metrics_cover_every_probe_and_each_kind():
+    probes = [
+        _probe("reference", 1.0, [True, True]),  # right
+        _probe("reference", 1.0, [True, False]),  # off by 0.5
+        _probe("abstain", 0.0, [False]),  # right
+    ]
+    m = probe_metrics(probes, ["q9 partial: bad reply"])
+    assert m["n_probes"] == 3 and m["n_failures"] == 1
+    assert m["mean_abs_error"] == pytest.approx(0.5 / 3)
+    assert m["within_0.25"] == pytest.approx(2 / 3)
+    assert m["reference/observed"] == pytest.approx(0.75)
+    assert m["reference/mean_abs_error"] == pytest.approx(0.25)
+    assert m["abstain/n"] == 1
+    assert probe_metrics([], []) == {"n_probes": 0, "n_failures": 0}
+
+
+def test_judge_run_goes_to_its_own_experiment(store: str):
+    with tracked_run(JUDGE_EXPERIMENT, "judge-m", {"evaluation.judge_model": "m"}, git_tags()) as t:
+        t.log_metrics(probe_metrics([_probe("reference", 1.0, [True])], []))
+    (run,) = _runs(store, JUDGE_EXPERIMENT)
+    assert run.data.params["evaluation.judge_model"] == "m"
+    assert run.data.metrics["reference/observed"] == 1.0
+    assert _runs(store) == []  # not mixed in with baseline and agent runs
+
+
+def test_git_tags_describe_the_checkout():
+    tags = git_tags()  # this repository is a git checkout
+    assert len(tags["git_sha"]) == 40
+    assert tags["git_dirty"] in {"true", "false"}

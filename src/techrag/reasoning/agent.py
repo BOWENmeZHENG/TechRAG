@@ -36,7 +36,7 @@ from techrag.common.config import (
     RunConfig,
 )
 from techrag.common.log import setup_logging
-from techrag.common.tracking import log_results, tracked_eval
+from techrag.common.tracking import tracked_eval
 from techrag.core.retrieve import Mode, Result, Retriever
 from techrag.eval.judge import Chat, ollama_judge
 from techrag.reasoning.harness import (
@@ -50,6 +50,7 @@ from techrag.reasoning.harness import (
     run_metadata,
     save_manifest,
 )
+from techrag.reasoning.metrics import log_results
 
 AGENT_MODEL = "qwen3.5:9b"
 RESULTS_PATH = Path("eval/agent.jsonl")
