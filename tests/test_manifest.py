@@ -82,6 +82,22 @@ def test_data_config_hash_follows_the_subset_contents(tmp_path: Path):
     assert data_config(subset).dataset_hash != with_manifest.dataset_hash
 
 
+def test_data_config_records_how_questions_were_sampled(tmp_path: Path):
+    (tmp_path / "questions.jsonl").write_text("{}\n")
+    data = data_config(tmp_path, seed=7, sample_size=20, per_type=3, question_ids=["b", "a"])
+    assert (data.seed, data.sample_size, data.per_type) == (7, 20, 3)
+    assert data.question_ids == ("b", "a")
+    plain = data_config(tmp_path)
+    assert (plain.seed, plain.sample_size, plain.per_type, plain.question_ids) == (
+        0,
+        None,
+        None,
+        None,
+    )
+    with pytest.raises(ValidationError):
+        data_config(tmp_path, sample_size=0)
+
+
 def test_data_config_needs_questions(tmp_path: Path):
     with pytest.raises(OSError):
         data_config(tmp_path)

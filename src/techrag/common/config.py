@@ -85,6 +85,16 @@ class DataConfig(_Section):
     dataset_hash: str | None = Field(
         default=None, description="content hash or DVC version of the subset"
     )
+    seed: int = Field(default=0, description="seed of the question sample")
+    sample_size: int | None = Field(
+        default=None, gt=0, description="questions sampled in all; None is every question"
+    )
+    per_type: int | None = Field(
+        default=None, gt=0, description="questions sampled per type; None is no per-type cap"
+    )
+    question_ids: tuple[str, ...] | None = Field(
+        default=None, description="run only these questions; None is no restriction"
+    )
 
 
 class RunMetadata(_Section):

@@ -615,7 +615,13 @@ def main() -> None:
             ),
             agent=AgentConfig(max_steps=args.max_steps, think=args.think),
             evaluation=EvaluationConfig(judge_model=args.judge_model),
-            data=data_config(args.subset),
+            data=data_config(
+                args.subset,
+                args.seed,
+                args.n,
+                args.per_type,
+                sorted(args.ids.split(",")) if args.ids else None,
+            ),
         )
         save_manifest(config, args.output)
         questions = read_questions(args.subset / "questions.jsonl")

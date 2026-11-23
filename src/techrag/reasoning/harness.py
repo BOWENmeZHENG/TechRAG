@@ -291,12 +291,22 @@ def run_metadata(run_name: str) -> RunMetadata:
     )
 
 
-def data_config(subset: Path) -> DataConfig:
-    """Describe a benchmark subset by name and by a hash of its questions and its manifest.
+def data_config(
+    subset: Path,
+    seed: int = 0,
+    sample_size: int | None = None,
+    per_type: int | None = None,
+    question_ids: Sequence[str] | None = None,
+) -> DataConfig:
+    """Describe the questions of a run: the subset, a hash of its contents, and how it was sampled.
 
     Args:
         subset: Directory holding the subset's ``questions.jsonl`` and, if built by
             ``techrag-subset``, its ``manifest.json``.
+        seed: Seed of the question sample.
+        sample_size: Questions sampled in all, or ``None`` for every question.
+        per_type: Questions sampled per type, or ``None`` for no per-type cap.
+        question_ids: Ids the run is restricted to, or ``None`` for no restriction.
 
     Returns:
         The data section of a run manifest.
@@ -309,7 +319,14 @@ def data_config(subset: Path) -> DataConfig:
         path = subset / name
         if name == "questions.jsonl" or path.exists():
             digest.update(path.read_bytes())
-    return DataConfig(subset_name=subset.resolve().name, dataset_hash=digest.hexdigest())
+    return DataConfig(
+        subset_name=subset.resolve().name,
+        dataset_hash=digest.hexdigest(),
+        seed=seed,
+        sample_size=sample_size,
+        per_type=per_type,
+        question_ids=tuple(question_ids) if question_ids is not None else None,
+    )
 
 
 def save_manifest(config: RunConfig, output: Path) -> Path:

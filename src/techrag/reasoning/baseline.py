@@ -156,7 +156,7 @@ def main() -> None:
             ),
             agent=AgentConfig(max_steps=1, think=args.think),  # one model turn, no search loop
             evaluation=EvaluationConfig(judge_model=args.judge_model),
-            data=data_config(args.subset),
+            data=data_config(args.subset, args.seed, args.n, args.per_type),
         )
         save_manifest(config, args.output)
         questions = read_questions(args.subset / "questions.jsonl")
