@@ -25,19 +25,32 @@ from techrag.common.config import (
     EMBEDDING_MODEL,
     INDEX_DIR,
     JUDGE_MODEL,
+    MAX_STEPS,
     NUM_CTX,
     OLLAMA_URL,
     SUBSET_DIR,
+    AgentConfig,
+    EvaluationConfig,
+    LLMConfig,
+    RetrievalConfig,
+    RunConfig,
 )
 from techrag.common.log import setup_logging
 from techrag.core.retrieve import Mode, Result, Retriever
 from techrag.eval.judge import Chat, ollama_judge
-from techrag.reasoning.harness import Record, grade, print_report, run_logged
+from techrag.reasoning.harness import (
+    Record,
+    data_config,
+    grade,
+    print_report,
+    run_logged,
+    run_metadata,
+    save_manifest,
+)
 
 AGENT_MODEL = "qwen3.5:9b"
 RESULTS_PATH = Path("eval/agent.jsonl")
 
-MAX_STEPS = 8
 # The prompt may grow to about this many characters (3 per token is cautious for mixed prose and
 # identifiers) before the agent must answer: Ollama silently drops the start of a prompt that
 # does not fit the context window, which would lose the question itself.
@@ -588,11 +601,29 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--ids", help="comma-separated question ids to run instead of all")
     parser.add_argument("--output", type=Path, default=RESULTS_PATH, help="JSON Lines results")
+    parser.add_argument("--run-name", help="name for the run manifest (default: results file name)")
     parser.add_argument("--fresh", action="store_true", help="discard earlier results first")
     args = parser.parse_args()
     setup_logging()
 
     try:
+        config = RunConfig(
+            metadata=run_metadata(args.run_name or args.output.stem),
+            llm=LLMConfig(model_name=args.llm, num_ctx=NUM_CTX),
+            retrieval=RetrievalConfig(
+                mode=args.mode, k=SEARCH_DOCS, embedding_model=args.embedding_model
+            ),
+            agent=AgentConfig(max_steps=args.max_steps, think=args.think),
+            evaluation=EvaluationConfig(judge_model=args.judge_model),
+            data=data_config(
+                args.subset,
+                args.seed,
+                args.n,
+                args.per_type,
+                sorted(args.ids.split(",")) if args.ids else None,
+            ),
+        )
+        save_manifest(config, args.output)
         questions = read_questions(args.subset / "questions.jsonl")
         if args.ids:
             wanted = set(args.ids.split(","))

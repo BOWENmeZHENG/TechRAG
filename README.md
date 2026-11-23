@@ -195,6 +195,7 @@ uv run techrag-agent --per-type 8
 | `-n` / `--per-type` | all questions | Seeded sample: `n` random questions, or this many of every type. Not both |
 | `--seed` | `0` | Sampling seed. Growing `--per-type` only adds questions, so saved results stay valid |
 | `--output` | `eval/baseline.jsonl`, `eval/agent.jsonl` | JSON Lines results |
+| `--run-name` | name of the results file | Name recorded in the [run manifest](#run-manifest) |
 | `--fresh` | off | Discard earlier results first |
 | `-k` | `10` | Chunks given to the model (baseline only) |
 | `--max-steps` | `8` | Model turns per question (agent only) |
@@ -202,6 +203,26 @@ uv run techrag-agent --per-type 8
 
 Each question is appended to the results file as soon as it is graded, so an interrupted run
 resumes where it stopped, and questions that errored are retried on the next run.
+
+#### Run manifest
+
+Both commands also save the settings of the run next to its results, as `eval/baseline.manifest.json`
+or `eval/agent.manifest.json` (named after `--output`; git-ignored like the results). The schema is
+`RunConfig` in [config.py](src/techrag/common/config.py), a set of frozen Pydantic models that
+reject unknown fields and out-of-range values, so a bad setting such as `--max-steps 0` stops the
+run before any model loads.
+
+| Section | Records |
+| --- | --- |
+| `llm` | Model name, temperature, `max_tokens`, context window |
+| `retrieval` | `mode`, `k`, embedding model, `index_version` (not filled in yet) |
+| `agent` | `max_steps` and `think`. The baseline is one model turn, so it records `max_steps=1` |
+| `evaluation` | Judge model and temperature |
+| `data` | Subset name, a SHA-256 of its `questions.jsonl` and `manifest.json`, and how questions were sampled: `seed`, `sample_size` (`-n`), `per_type`, `question_ids` (`--ids`) |
+| `metadata` | Run name, git commit, UTC timestamp, author (from `git config user.name`) |
+
+The manifest is rewritten on every start, so resuming with different options leaves it describing
+only the latest settings. `RunConfig.load(path)` reads one back and validates it.
 
 #### How the agent works
 
@@ -419,7 +440,7 @@ eval/              Generated results and reports
 src/techrag/
   api.py             FastAPI app serving search and ask
   common/
-    config.py        Shared defaults: model names, index and subset paths, Ollama URL
+    config.py        Shared defaults (models, paths, Ollama URL) and the run manifest schema
     ollama.py        Minimal Ollama chat client
   core/
     ingest.py        Load, chunk, and store documents
@@ -433,7 +454,7 @@ src/techrag/
     recall.py        Document-level retrieval recall on the benchmark questions
     judge.py         LLM judge (correctness x completeness) and its self-test
   reasoning/
-    harness.py       Shared run, grade, log and report machinery
+    harness.py       Shared run, grade, log and report machinery, and manifest helpers
     baseline.py      Single-shot RAG baseline, graded and logged
     agent.py         Agentic search loop (search / read_doc tools), graded and logged
     compare.py       Paired comparison of two result files with a bootstrap CI
