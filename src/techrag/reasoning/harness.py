@@ -6,14 +6,17 @@ Both the single-shot baseline (:mod:`techrag.reasoning.baseline`) and the agent
 interrupted run resumes where it stopped, and summarize the scores the same way.
 """
 
+import hashlib
 import json
 import logging
+import subprocess
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from techrag.benchmarks.bench import BenchQuestion
+from techrag.common.config import DataConfig, RunConfig, RunMetadata
 from techrag.core.retrieve import Result
 from techrag.eval.judge import Chat, Verdict, judge
 from techrag.eval.recall import gold_doc_ranks
@@ -263,6 +266,69 @@ def run_each(
         on_record(record)
         new.append(record)
     return new
+
+
+def _git(*args: str) -> str | None:
+    """Return the output of ``git`` with ``args``, or ``None`` if git or the repo is missing."""
+    try:
+        out = subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return out.strip() or None
+
+
+def run_metadata(run_name: str) -> RunMetadata:
+    """Describe who is starting a run now, and from which commit.
+
+    Args:
+        run_name: Name for the run.
+
+    Returns:
+        The metadata, with ``git_sha`` and ``author`` left empty when git cannot supply them.
+    """
+    return RunMetadata(
+        run_name=run_name, git_sha=_git("rev-parse", "HEAD"), author=_git("config", "user.name")
+    )
+
+
+def data_config(subset: Path) -> DataConfig:
+    """Describe a benchmark subset by name and by a hash of its questions and its manifest.
+
+    Args:
+        subset: Directory holding the subset's ``questions.jsonl`` and, if built by
+            ``techrag-subset``, its ``manifest.json``.
+
+    Returns:
+        The data section of a run manifest.
+
+    Raises:
+        OSError: If ``questions.jsonl`` cannot be read.
+    """
+    digest = hashlib.sha256()
+    for name in ("questions.jsonl", "manifest.json"):
+        path = subset / name
+        if name == "questions.jsonl" or path.exists():
+            digest.update(path.read_bytes())
+    return DataConfig(subset_name=subset.resolve().name, dataset_hash=digest.hexdigest())
+
+
+def save_manifest(config: RunConfig, output: Path) -> Path:
+    """Write ``config`` next to a results file, as ``<results name>.manifest.json``.
+
+    Args:
+        config: The run's manifest.
+        output: The JSON Lines results file of the run.
+
+    Returns:
+        The path written.
+
+    Raises:
+        OSError: If the manifest cannot be written.
+    """
+    path = output.with_suffix(".manifest.json")
+    config.save(path)
+    logger.info("manifest: %s", path)
+    return path
 
 
 def run_logged(

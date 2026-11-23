@@ -14,6 +14,7 @@ dependencies = [
     "fastapi>=0.148.0",
     "langchain-text-splitters>=1.1.2",
     "pyarrow>=26.0.1",
+    "pydantic>=2.13",
     "sentence-transformers>=6.1.0",
     "torch>=2.14",
     "uvicorn>=0.54.0",

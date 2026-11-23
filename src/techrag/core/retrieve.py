@@ -7,11 +7,11 @@ import sys
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Literal, get_args
+from typing import get_args
 
 import faiss
 
-from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR
+from techrag.common.config import EMBEDDING_MODEL, INDEX_DIR, Mode
 from techrag.common.log import setup_logging
 from techrag.core.bm25 import BM25
 from techrag.core.embed import embed, load_model
@@ -21,8 +21,6 @@ logger = logging.getLogger(__name__)
 # BGE models are trained to match short queries against longer passages when the query
 # carries this instruction. Passages (see ingest) are embedded without it.
 QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
-
-Mode = Literal["dense", "bm25", "hybrid"]
 
 # Reciprocal rank fusion damping constant; 60 is the value from the original RRF paper.
 RRF_K = 60

@@ -22,6 +22,11 @@ from techrag.common.config import (
     NUM_CTX,
     OLLAMA_URL,
     SUBSET_DIR,
+    AgentConfig,
+    EvaluationConfig,
+    LLMConfig,
+    RetrievalConfig,
+    RunConfig,
 )
 from techrag.common.log import setup_logging
 from techrag.common.ollama import ollama_chat
@@ -30,11 +35,14 @@ from techrag.core.retrieve import Mode, Result, Retriever
 from techrag.eval.judge import Chat, ollama_judge
 from techrag.reasoning.harness import (
     Record,
+    data_config,
     gold_found,
     grade,
     print_report,
     run_each,
     run_logged,
+    run_metadata,
+    save_manifest,
 )
 
 ANSWER_MODEL = "qwen3.5:9b"
@@ -128,6 +136,7 @@ def main() -> None:
     parser.add_argument("--per-type", type=int, help="run on this many questions of every type")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output", type=Path, default=RESULTS_PATH, help="JSON Lines results")
+    parser.add_argument("--run-name", help="name for the run manifest (default: results file name)")
     parser.add_argument("--fresh", action="store_true", help="discard earlier results first")
     args = parser.parse_args()
     setup_logging()
@@ -139,6 +148,17 @@ def main() -> None:
         )
 
     try:
+        config = RunConfig(
+            metadata=run_metadata(args.run_name or args.output.stem),
+            llm=LLMConfig(model_name=args.llm, num_ctx=NUM_CTX),
+            retrieval=RetrievalConfig(
+                mode=args.mode, k=args.k, embedding_model=args.embedding_model
+            ),
+            agent=AgentConfig(max_steps=1, think=args.think),  # one model turn, no search loop
+            evaluation=EvaluationConfig(judge_model=args.judge_model),
+            data=data_config(args.subset),
+        )
+        save_manifest(config, args.output)
         questions = read_questions(args.subset / "questions.jsonl")
         questions = sample_questions(questions, args.n, args.per_type, args.seed)
         retriever = Retriever(args.index_dir, args.embedding_model)
