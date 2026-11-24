@@ -30,6 +30,7 @@ from techrag.common.config import (
 )
 from techrag.common.log import setup_logging
 from techrag.common.ollama import ollama_chat
+from techrag.common.tracking import tracked_eval
 from techrag.core.generate import answer_from
 from techrag.core.retrieve import Mode, Result, Retriever
 from techrag.eval.judge import Chat, ollama_judge
@@ -38,12 +39,15 @@ from techrag.reasoning.harness import (
     data_config,
     gold_found,
     grade,
+    index_version,
+    load_records,
     print_report,
     run_each,
     run_logged,
     run_metadata,
     save_manifest,
 )
+from techrag.reasoning.metrics import log_results
 
 ANSWER_MODEL = "qwen3.5:9b"
 RESULTS_PATH = Path("eval/baseline.jsonl")
@@ -138,6 +142,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=RESULTS_PATH, help="JSON Lines results")
     parser.add_argument("--run-name", help="name for the run manifest (default: results file name)")
     parser.add_argument("--fresh", action="store_true", help="discard earlier results first")
+    parser.add_argument("--no-mlflow", action="store_true", help="do not record the run in MLflow")
     args = parser.parse_args()
     setup_logging()
 
@@ -152,7 +157,10 @@ def main() -> None:
             metadata=run_metadata(args.run_name or args.output.stem),
             llm=LLMConfig(model_name=args.llm, num_ctx=NUM_CTX),
             retrieval=RetrievalConfig(
-                mode=args.mode, k=args.k, embedding_model=args.embedding_model
+                mode=args.mode,
+                k=args.k,
+                embedding_model=args.embedding_model,
+                index_version=index_version(args.index_dir),
             ),
             agent=AgentConfig(max_steps=1, think=args.think),  # one model turn, no search loop
             evaluation=EvaluationConfig(judge_model=args.judge_model),
@@ -164,18 +172,23 @@ def main() -> None:
         retriever = Retriever(args.index_dir, args.embedding_model)
         retriever.warm_up()
         judge_chat = ollama_judge(args.judge_model, args.ollama_url)
-        records = run_logged(
-            questions,
-            lambda q: run_question(
-                q,
-                lambda text, k: retriever.search(text, k, args.mode),
-                answer_chat,
-                judge_chat,
-                args.k,
-            ),
-            args.output,
-            args.fresh,
-        )
+        resumed = not args.fresh and bool(load_records(args.output))
+        with tracked_eval(config, "baseline", args.run_name, resumed, not args.no_mlflow) as run:
+            try:
+                records = run_logged(
+                    questions,
+                    lambda q: run_question(
+                        q,
+                        lambda text, k: retriever.search(text, k, args.mode),
+                        answer_chat,
+                        judge_chat,
+                        args.k,
+                    ),
+                    args.output,
+                    args.fresh,
+                )
+            finally:  # an interrupted run keeps what it got through
+                log_results(run, questions, args.output)
     except (OSError, ValueError) as e:
         sys.exit(f"error: {e}")
     print_report(records)

@@ -168,6 +168,7 @@ half the facts, another question's answer) and reports how often it agrees:
 
 ```sh
 uv run techrag-judge -n 20          # --seed, --model, --think; writes eval/judge_selftest.json
+                                    # (--no-mlflow skips the MLflow run, see below)
 ```
 
 ### Run the baseline and the agent
@@ -197,6 +198,7 @@ uv run techrag-agent --per-type 8
 | `--output` | `eval/baseline.jsonl`, `eval/agent.jsonl` | JSON Lines results |
 | `--run-name` | name of the results file | Name recorded in the [run manifest](#run-manifest) |
 | `--fresh` | off | Discard earlier results first |
+| `--no-mlflow` | off | Do not record the run in [MLflow](#track-runs-in-mlflow) |
 | `-k` | `10` | Chunks given to the model (baseline only) |
 | `--max-steps` | `8` | Model turns per question (agent only) |
 | `--ids` | all | Comma-separated question ids to run (agent only) |
@@ -215,7 +217,7 @@ run before any model loads.
 | Section | Records |
 | --- | --- |
 | `llm` | Model name, temperature, `max_tokens`, context window |
-| `retrieval` | `mode`, `k`, embedding model, `index_version` (not filled in yet) |
+| `retrieval` | `mode`, `k`, embedding model, `index_version` (a SHA-256 of `index.faiss` and `chunks.json`) |
 | `agent` | `max_steps` and `think`. The baseline is one model turn, so it records `max_steps=1` |
 | `evaluation` | Judge model and temperature |
 | `data` | Subset name, a SHA-256 of its `questions.jsonl` and `manifest.json`, and how questions were sampled: `seed`, `sample_size` (`-n`), `per_type`, `question_ids` (`--ids`) |
@@ -223,6 +225,53 @@ run before any model loads.
 
 The manifest is rewritten on every start, so resuming with different options leaves it describing
 only the latest settings. `RunConfig.load(path)` reads one back and validates it.
+
+#### Track runs in MLflow
+
+`techrag-baseline`, `techrag-agent` and `techrag-judge` each record their run in
+[MLflow](https://mlflow.org), so runs can be sorted, filtered and compared in a browser. Pass
+`--no-mlflow` to skip it; MLflow is then not even imported.
+
+```sh
+uv run mlflow ui --backend-store-uri sqlite:///mlflow.db     # http://localhost:5000
+```
+
+Runs are stored in `mlflow.db` in the directory you run from, with artifacts under `mlruns/` next
+to it (both git-ignored). Set `MLFLOW_TRACKING_URI` to use another store or a tracking server. Run
+the commands from one directory, or they will each start a store of their own.
+
+| Experiment | Runs | Named |
+| --- | --- | --- |
+| `techrag` | Baseline and agent, told apart by the `system` tag | `<system>-<model>-<mode>`, or `--run-name` |
+| `techrag-judge` | Judge self-tests | `judge-<model>` |
+
+What a baseline or agent run records:
+
+| Kind | Contents |
+| --- | --- |
+| Parameters | Every setting of the [run manifest](#run-manifest) except the metadata, named `section.field` (`retrieval.k`, `agent.max_steps`, `data.dataset_hash`, ...) |
+| Tags | `system`, `resumed`, `started_at`, `author`, `git_sha`, and `git_dirty` (uncommitted or untracked files, so a SHA alone does not claim to reproduce the run) |
+| Metrics | `score`, `correctness`, `completeness`, `n_questions`, `errors`; the same by question type (`by_type/<type>/score`) and by retrieval group (`by_retrieval/<group>/score`); mean `answer_seconds` and `gold_found`; for the agent, mean `steps` and `tokens` and a count per stop reason (`stop/answered`, `stop/max_steps`, ...) |
+| Artifacts | `manifest.json`, the results JSON Lines file, `question_ids.json` when `--ids` is used, and for the agent `agent_trace.json` |
+
+`agent_trace.json` maps each question id to its score, steps, tokens and stop reason, and to every
+tool call with its arguments and the documents it returned. A call's `thought` is the text the
+model wrote alongside it, so it is empty when the model calls a tool without saying anything.
+
+A judge run records its model, `--think`, context size, `-n` and `--seed` as parameters, and how far
+the judge was from the known score: `mean_abs_error` and `within_0.25` overall and for each probe
+kind (`reference/observed`, `abstain/mean_abs_error`, ...). Its artifact is the report JSON.
+
+Notes on how runs are recorded:
+
+- Resuming a results file starts a new MLflow run, tagged `resumed=true`, because MLflow does not
+  let a run change its parameters. Its metrics cover every question of the invocation, including
+  those answered earlier. Only the latest invocation's parameters are recorded, as in the manifest.
+- An interrupted run (Ctrl-C) ends as `KILLED` and still logs the metrics and results of the
+  questions it finished. Any other error ends it as `FAILED`.
+- A bad setting stops the command before a run is created. If MLflow cannot record something once
+  the run is going, it logs a warning and the evaluation continues; the results file is still
+  complete.
 
 #### How the agent works
 
@@ -442,6 +491,7 @@ src/techrag/
   common/
     config.py        Shared defaults (models, paths, Ollama URL) and the run manifest schema
     ollama.py        Minimal Ollama chat client
+    tracking.py      MLflow runs: parameters, tags, metrics and artifacts, or a no-op when off
   core/
     ingest.py        Load, chunk, and store documents
     embed.py         Load the embedding model and embed texts
@@ -457,6 +507,7 @@ src/techrag/
     harness.py       Shared run, grade, log and report machinery, and manifest helpers
     baseline.py      Single-shot RAG baseline, graded and logged
     agent.py         Agentic search loop (search / read_doc tools), graded and logged
+    metrics.py       Metrics and the agent trace to log to MLflow from a run's records
     compare.py       Paired comparison of two result files with a bootstrap CI
 tests/
 .github/workflows/ CI: ruff and pytest

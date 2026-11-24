@@ -291,6 +291,32 @@ def run_metadata(run_name: str) -> RunMetadata:
     )
 
 
+INDEX_FILES = ("index.faiss", "chunks.json")  # what ``techrag-ingest`` writes
+
+
+def index_version(index_dir: Path) -> str:
+    """Return a SHA-256 of the index in ``index_dir``, to tell one build of it from another.
+
+    It covers the vectors (``index.faiss``) and the chunks (``chunks.json``), so changing the
+    documents, the chunking or the embedding model changes it. Hashing takes a fraction of a
+    second even for a large index.
+
+    Args:
+        index_dir: Directory that ``techrag-ingest`` wrote the index to.
+
+    Returns:
+        The hex digest.
+
+    Raises:
+        OSError: If an index file is missing or cannot be read.
+    """
+    digest = hashlib.sha256()
+    for name in INDEX_FILES:
+        with (index_dir / name).open("rb") as f:
+            digest.update(hashlib.file_digest(f, "sha256").digest())
+    return digest.hexdigest()
+
+
 def data_config(
     subset: Path,
     seed: int = 0,

@@ -12,7 +12,7 @@ from techrag.common.config import (
     RunConfig,
     RunMetadata,
 )
-from techrag.reasoning.harness import data_config, run_metadata, save_manifest
+from techrag.reasoning.harness import data_config, index_version, run_metadata, save_manifest
 
 
 def _config(**overrides) -> RunConfig:
@@ -114,3 +114,20 @@ def test_save_manifest_sits_next_to_the_results(tmp_path: Path):
     path = save_manifest(_config(), tmp_path / "eval" / "agent.jsonl")
     assert path == tmp_path / "eval" / "agent.manifest.json"
     assert json.loads(path.read_text())["metadata"]["run_name"] == "r1"
+
+
+def test_index_version_follows_the_index_files(tmp_path: Path):
+    (tmp_path / "index.faiss").write_bytes(b"vectors")
+    (tmp_path / "chunks.json").write_text("[]")
+    first = index_version(tmp_path)
+    assert first == index_version(tmp_path)
+    assert len(first) == 64
+
+    (tmp_path / "chunks.json").write_text('[{"source": "a", "text": "b"}]')
+    assert index_version(tmp_path) != first
+
+
+def test_index_version_needs_both_files(tmp_path: Path):
+    (tmp_path / "index.faiss").write_bytes(b"vectors")
+    with pytest.raises(OSError):
+        index_version(tmp_path)
