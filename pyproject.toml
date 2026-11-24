@@ -35,7 +35,7 @@ techrag-compare = "techrag.reasoning.compare:main"
 
 [dependency-groups]
 data = [
-    "dvc>=3.67.1",
+    "dvc[s3]>=3.67.1",
 ]
 dev = [
     "httpx>=0.28.1",
