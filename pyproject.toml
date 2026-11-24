@@ -34,6 +34,9 @@ techrag-agent = "techrag.reasoning.agent:main"
 techrag-compare = "techrag.reasoning.compare:main"
 
 [dependency-groups]
+data = [
+    "dvc>=3.67.1",
+]
 dev = [
     "httpx>=0.28.1",
     "pytest>=8",
