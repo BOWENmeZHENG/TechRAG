@@ -219,8 +219,6 @@ __marimo__/
 
 # Mac
 .DS_Store
-# TechRAG generated index
-.index/
 # eval results
 results.json
 eval/recall*.json
@@ -233,8 +231,6 @@ eval/*_progress.log
 # downloaded datasets (e.g. from Hugging Face)
 data/external/*
 !data/external/.gitkeep
-# generated benchmark subsets
-data/subsets/
 # MLflow tracking store
 mlruns/
 mlflow.db
