@@ -17,6 +17,7 @@ from pathlib import Path
 
 from techrag.benchmarks.bench import BenchQuestion
 from techrag.common.config import DataConfig, RunConfig, RunMetadata
+from techrag.common.dvc_version import dvc_version
 from techrag.core.retrieve import Result
 from techrag.eval.judge import Chat, Verdict, judge
 from techrag.eval.recall import gold_doc_ranks
@@ -338,7 +339,8 @@ def data_config(
         The data section of a run manifest.
 
     Raises:
-        OSError: If ``questions.jsonl`` cannot be read.
+        OSError: If ``questions.jsonl`` cannot be read, or a file of a DVC-tracked subset cannot.
+        ValueError: If ``dvc.lock`` or the subset's ``.dvc`` file is not valid YAML.
     """
     digest = hashlib.sha256()
     for name in ("questions.jsonl", "manifest.json"):
@@ -348,6 +350,7 @@ def data_config(
     return DataConfig(
         subset_name=subset.resolve().name,
         dataset_hash=digest.hexdigest(),
+        dataset_dvc=dvc_version(subset),
         seed=seed,
         sample_size=sample_size,
         per_type=per_type,

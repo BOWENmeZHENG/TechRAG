@@ -5,7 +5,14 @@ import mlflow
 import pytest
 
 from techrag.benchmarks.bench import BenchQuestion
-from techrag.common.config import AgentConfig, DataConfig, RetrievalConfig, RunConfig, RunMetadata
+from techrag.common.config import (
+    AgentConfig,
+    DataConfig,
+    DvcVersion,
+    RetrievalConfig,
+    RunConfig,
+    RunMetadata,
+)
 from techrag.common.tracking import (
     EVAL_EXPERIMENT,
     JUDGE_EXPERIMENT,
@@ -46,6 +53,17 @@ def test_params_are_flat_and_leave_out_metadata_and_question_ids():
     assert params["data.sample_size"] is None
     assert not any(k.startswith("metadata") for k in params)
     assert "data.question_ids" not in params
+
+
+def test_params_carry_the_dvc_versions_of_the_index_and_the_subset():
+    index = DvcVersion(md5="a" * 32 + ".dir", committed=True)
+    subset = DvcVersion(md5="b" * 32 + ".dir", committed=False)
+    cfg = _config(retrieval=RetrievalConfig(index_dvc=index), data=DataConfig(dataset_dvc=subset))
+    params = flatten_params(cfg)
+    assert params["retrieval.index_dvc.md5"] == index.md5
+    assert params["retrieval.index_dvc.committed"] is True
+    assert params["data.dataset_dvc.md5"] == subset.md5
+    assert params["data.dataset_dvc.committed"] is False
 
 
 def test_metrics_cover_overall_groups_and_agent_extras():

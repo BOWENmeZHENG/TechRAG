@@ -217,10 +217,10 @@ run before any model loads.
 | Section | Records |
 | --- | --- |
 | `llm` | Model name, temperature, `max_tokens`, context window |
-| `retrieval` | `mode`, `k`, embedding model, `index_version` (a SHA-256 of `index.faiss` and `chunks.json`) |
+| `retrieval` | `mode`, `k`, embedding model, `index_version` (a SHA-256 of `index.faiss` and `chunks.json`), `index_dvc` (the [DVC version](#version-data-and-indexes-with-dvc) of the index directory) |
 | `agent` | `max_steps` and `think`. The baseline is one model turn, so it records `max_steps=1` |
 | `evaluation` | Judge model and temperature |
-| `data` | Subset name, a SHA-256 of its `questions.jsonl` and `manifest.json`, and how questions were sampled: `seed`, `sample_size` (`-n`), `per_type`, `question_ids` (`--ids`) |
+| `data` | Subset name, a SHA-256 of its `questions.jsonl` and `manifest.json`, `dataset_dvc` (the DVC version of the subset directory), and how questions were sampled: `seed`, `sample_size` (`-n`), `per_type`, `question_ids` (`--ids`) |
 | `metadata` | Run name, git commit, UTC timestamp, author (from `git config user.name`) |
 
 The manifest is rewritten on every start, so resuming with different options leaves it describing
@@ -320,6 +320,35 @@ the cost (seconds, model turns and tokens per question). `--names A B` relabels 
 ```sh
 uv run techrag-compare eval/baseline.jsonl eval/agent.jsonl
 ```
+
+### Version data and indexes with DVC
+
+The subsets in `data/subsets/` and the indexes in `.index/` are too big for git, so
+[DVC](https://dvc.org) tracks them: git holds small pointer files (`*.dvc` and `dvc.lock`) and the
+data lives in an S3 remote (`.dvc/config`). DVC is in its own dependency group, so evaluating needs
+only `uv sync`; for the commands below use `uv run --group data dvc ...`.
+
+```sh
+dvc pull                 # fetch the data and indexes the committed pointers name
+dvc repro                # rebuild an index if its subset, ingest code or params.yaml changed
+dvc push                 # after a rebuild: upload the new data, then commit dvc.lock
+dvc add data/subsets/x   # track a new directory (and git add the .dvc file it writes)
+```
+
+`dvc.yaml` has one `ingest` stage per subset (`ingest@dev4k`, ...), which runs `techrag-ingest`
+with the chunk size, overlap and embedding model in `params.yaml`. `dvc.lock` records the hash of
+the subset, the code and parameters it was built from, and the index it produced.
+
+Every baseline and agent run records the DVC version of the index and of the subset it read
+(`retrieval.index_dvc` and `data.dataset_dvc` in the manifest, so also MLflow parameters):
+
+| Field | Meaning |
+| --- | --- |
+| `md5` | The hash `dvc add` would record for the files on disk when the run started (`….dir`). After `dvc push`, `dvc pull` restores exactly those files |
+| `committed` | `true` if `md5` is the version in `dvc.lock` or the `.dvc` file, `false` if the files were changed since. A run with `false` read an index that no commit describes |
+
+These are in addition to `index_version`, which is a hash of the files actually loaded. A directory
+DVC does not track records no DVC version.
 
 ## Core RAG toolkit
 
@@ -482,14 +511,18 @@ uv run ruff check    # lint
 ## Layout
 
 ```
-data/subsets/      Benchmark dev subset built by techrag-subset (git-ignored)
+.index/            Indexes built by techrag-ingest (versioned by DVC, not git)
+data/subsets/      Benchmark subsets built by techrag-subset (versioned by DVC, not git)
 data/external/     Downloaded datasets, e.g. EnterpriseRAG-Bench (git-ignored)
+dvc.yaml           Pipeline: one ingest stage per subset; dvc.lock records what it built
+params.yaml        Chunk size, overlap and embedding model for the ingest stages
 docs/              Notes on the EnterpriseRAG-Bench data and question types
 eval/              Generated results and reports
 src/techrag/
   api.py             FastAPI app serving search and ask
   common/
     config.py        Shared defaults (models, paths, Ollama URL) and the run manifest schema
+    dvc_version.py   The DVC version of a data or index directory, checked against dvc.lock
     ollama.py        Minimal Ollama chat client
     tracking.py      MLflow runs: parameters, tags, metrics and artifacts, or a no-op when off
   core/

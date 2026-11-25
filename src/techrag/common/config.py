@@ -44,6 +44,19 @@ class _Section(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
+class DvcVersion(_Section):
+    """The DVC version of a tracked directory, as it was on disk when the run started.
+
+    ``md5`` is what ``dvc add`` would record for the files now in the directory, so it names an
+    object in the DVC remote (after ``dvc push``) that restores exactly them.
+    """
+
+    md5: str = Field(description="DVC hash of the directory's current files, e.g. ``abc….dir``")
+    committed: bool = Field(
+        description="whether ``md5`` is the version recorded in dvc.lock or the .dvc file"
+    )
+
+
 class LLMConfig(_Section):
     """The model that writes answers, and how it samples."""
 
@@ -61,6 +74,10 @@ class RetrievalConfig(_Section):
     embedding_model: str = EMBEDDING_MODEL
     index_version: str | None = Field(
         default=None, description="label or hash of the built index, to tell rebuilds apart"
+    )
+    index_dvc: DvcVersion | None = Field(
+        default=None,
+        description="DVC version of the index directory; None if DVC does not track it",
     )
 
 
@@ -83,7 +100,11 @@ class DataConfig(_Section):
 
     subset_name: str = Field(default=SUBSET_DIR.name, min_length=1)
     dataset_hash: str | None = Field(
-        default=None, description="content hash or DVC version of the subset"
+        default=None, description="content hash of the subset's questions and manifest"
+    )
+    dataset_dvc: DvcVersion | None = Field(
+        default=None,
+        description="DVC version of the subset directory; None if DVC does not track it",
     )
     seed: int = Field(default=0, description="seed of the question sample")
     sample_size: int | None = Field(

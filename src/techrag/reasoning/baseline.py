@@ -28,6 +28,7 @@ from techrag.common.config import (
     RetrievalConfig,
     RunConfig,
 )
+from techrag.common.dvc_version import dvc_version
 from techrag.common.log import setup_logging
 from techrag.common.ollama import ollama_chat
 from techrag.common.tracking import tracked_eval
@@ -161,6 +162,7 @@ def main() -> None:
                 k=args.k,
                 embedding_model=args.embedding_model,
                 index_version=index_version(args.index_dir),
+                index_dvc=dvc_version(args.index_dir),
             ),
             agent=AgentConfig(max_steps=1, think=args.think),  # one model turn, no search loop
             evaluation=EvaluationConfig(judge_model=args.judge_model),
