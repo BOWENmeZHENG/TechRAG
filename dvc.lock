@@ -1,0 +1,31 @@
+schema: '2.0'
+stages:
+  ingest:
+    cmd: techrag-ingest data/subsets/dev4k --index-dir .index/dev4k --size 500 
+      --overlap 50 --model BAAI/bge-small-en-v1.5
+    deps:
+    - path: data/subsets/dev4k
+      hash: md5
+      md5: 535e0c70b2abcafa06332d38192be853.dir
+      size: 25064824
+      nfiles: 4725
+    - path: src/techrag/core/embed.py
+      hash: md5
+      md5: fc33a277119d8e72feab8a9b5f12cfe4
+      size: 966
+    - path: src/techrag/core/ingest.py
+      hash: md5
+      md5: 6100dbeca56bde8a6d180ca69451133c
+      size: 4837
+    params:
+      params.yaml:
+        ingest:
+          size: 500
+          overlap: 50
+          model: BAAI/bge-small-en-v1.5
+    outs:
+    - path: .index/dev4k
+      hash: md5
+      md5: 82518f7a993d351061a7c19cf37c04bf.dir
+      size: 134021083
+      nfiles: 2
