@@ -330,14 +330,23 @@ only `uv sync`; for the commands below use `uv run --group data dvc ...`.
 
 ```sh
 dvc pull                 # fetch the data and indexes the committed pointers name
-dvc repro                # rebuild an index if its subset, ingest code or params.yaml changed
+dvc repro                # rebuild the subsets and indexes that are out of date
 dvc push                 # after a rebuild: upload the new data, then commit dvc.lock
-dvc add data/subsets/x   # track a new directory (and git add the .dvc file it writes)
+dvc add data/other       # track a directory no stage builds (and git add the .dvc file it writes)
 ```
 
-`dvc.yaml` has one `ingest` stage per subset (`ingest@dev4k`, ...), which runs `techrag-ingest`
-with the chunk size, overlap and embedding model in `params.yaml`. `dvc.lock` records the hash of
-the subset, the code and parameters it was built from, and the index it produced.
+`dvc.yaml` has two stages per subset (`dev1k`, `dev2k`, `dev4k`), and `dvc.lock` records the
+hashes of what each one read and produced:
+
+| Stage | Runs | Rebuilds when these change |
+| --- | --- | --- |
+| `subset@dev4k`, ... | `techrag-subset` with seed 0 and 1,000, 2,000 or 4,000 distractors | The benchmark files, `bench.py`, the command in `dvc.yaml` |
+| `ingest@dev4k`, ... | `techrag-ingest` | The subset, `ingest.py`, `embed.py`, the chunk size, overlap or embedding model in `params.yaml` |
+
+`dvc repro` needs the benchmark under `data/external/EnterpriseRAG-Bench`, which DVC hashes but
+does not store. Without it, `dvc repro --allow-missing` skips stages whose only difference is
+missing files, and `dvc repro --single-item ingest@dev4k` checks one index against the pulled
+subset.
 
 Every baseline and agent run records the DVC version of the index and of the subset it read
 (`retrieval.index_dvc` and `data.dataset_dvc` in the manifest, so also MLflow parameters):
@@ -514,7 +523,7 @@ uv run ruff check    # lint
 .index/            Indexes built by techrag-ingest (versioned by DVC, not git)
 data/subsets/      Benchmark subsets built by techrag-subset (versioned by DVC, not git)
 data/external/     Downloaded datasets, e.g. EnterpriseRAG-Bench (git-ignored)
-dvc.yaml           Pipeline: one ingest stage per subset; dvc.lock records what it built
+dvc.yaml           Pipeline: benchmark to subsets to indexes; dvc.lock records what it built
 params.yaml        Chunk size, overlap and embedding model for the ingest stages
 docs/              Notes on the EnterpriseRAG-Bench data and question types
 eval/              Generated results and reports

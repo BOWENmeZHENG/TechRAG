@@ -1,4 +1,19 @@
 stages:
+  subset:
+    # Build each subset from the downloaded benchmark: every gold document plus ${item} seeded
+    # random distractors. DVC hashes the benchmark files but does not upload them.
+    foreach:
+      dev1k: 1000
+      dev2k: 2000
+      dev4k: 4000
+    do:
+      cmd: >-
+        techrag-subset --out-dir data/subsets/${key} --distractors ${item} --seed 0
+      deps:
+        - data/external/EnterpriseRAG-Bench/data
+        - src/techrag/benchmarks/bench.py
+      outs:
+        - data/subsets/${key}
   ingest:
     # Build one FAISS index per benchmark subset. Run with `dvc repro` (or `dvc repro ingest@dev4k`).
     foreach:

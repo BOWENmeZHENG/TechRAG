@@ -87,3 +87,57 @@ stages:
       md5: 82518f7a993d351061a7c19cf37c04bf.dir
       size: 134021083
       nfiles: 2
+  subset@dev4k:
+    cmd: techrag-subset --out-dir data/subsets/dev4k --distractors 4000 --seed 0
+    deps:
+    - path: data/external/EnterpriseRAG-Bench/data
+      hash: md5
+      md5: 87c459e89742c4cc74ed4456a11e9bab.dir
+      size: 1410301868
+      nfiles: 2
+    - path: src/techrag/benchmarks/bench.py
+      hash: md5
+      md5: 2b29a9275d568b35a89983c18c97cb3f
+      size: 12377
+    outs:
+    - path: data/subsets/dev4k
+      hash: md5
+      md5: 535e0c70b2abcafa06332d38192be853.dir
+      size: 25064824
+      nfiles: 4725
+  subset@dev2k:
+    cmd: techrag-subset --out-dir data/subsets/dev2k --distractors 2000 --seed 0
+    deps:
+    - path: data/external/EnterpriseRAG-Bench/data
+      hash: md5
+      md5: 87c459e89742c4cc74ed4456a11e9bab.dir
+      size: 1410301868
+      nfiles: 2
+    - path: src/techrag/benchmarks/bench.py
+      hash: md5
+      md5: 2b29a9275d568b35a89983c18c97cb3f
+      size: 12377
+    outs:
+    - path: data/subsets/dev2k
+      hash: md5
+      md5: b9f0a2c351fc8fcf9ea2f572494801c9.dir
+      size: 15405897
+      nfiles: 2725
+  subset@dev1k:
+    cmd: techrag-subset --out-dir data/subsets/dev1k --distractors 1000 --seed 0
+    deps:
+    - path: data/external/EnterpriseRAG-Bench/data
+      hash: md5
+      md5: 87c459e89742c4cc74ed4456a11e9bab.dir
+      size: 1410301868
+      nfiles: 2
+    - path: src/techrag/benchmarks/bench.py
+      hash: md5
+      md5: 2b29a9275d568b35a89983c18c97cb3f
+      size: 12377
+    outs:
+    - path: data/subsets/dev1k
+      hash: md5
+      md5: 9ffbfb3cc106da398ae8ba1a4183143c.dir
+      size: 10387882
+      nfiles: 1725
