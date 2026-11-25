@@ -1,0 +1,6 @@
+outs:
+- md5: b9f0a2c351fc8fcf9ea2f572494801c9.dir
+  size: 15405897
+  nfiles: 2725
+  hash: md5
+  path: dev2k

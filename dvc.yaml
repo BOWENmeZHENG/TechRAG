@@ -1,14 +1,19 @@
 stages:
   ingest:
-    # Build the dev4k FAISS index from the dev4k subset. Run with `dvc repro`.
-    cmd: >-
-      techrag-ingest data/subsets/dev4k --index-dir .index/dev4k
-      --size ${ingest.size} --overlap ${ingest.overlap} --model ${ingest.model}
-    deps:
-      - data/subsets/dev4k
-      - src/techrag/core/ingest.py
-      - src/techrag/core/embed.py
-    params:
-      - ingest
-    outs:
-      - .index/dev4k
+    # Build one FAISS index per benchmark subset. Run with `dvc repro` (or `dvc repro ingest@dev4k`).
+    foreach:
+      - dev1k
+      - dev2k
+      - dev4k
+    do:
+      cmd: >-
+        techrag-ingest data/subsets/${item} --index-dir .index/${item}
+        --size ${ingest.size} --overlap ${ingest.overlap} --model ${ingest.model}
+      deps:
+        - data/subsets/${item}
+        - src/techrag/core/ingest.py
+        - src/techrag/core/embed.py
+      params:
+        - ingest
+      outs:
+        - .index/${item}

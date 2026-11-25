@@ -1,0 +1,6 @@
+outs:
+- md5: 9ffbfb3cc106da398ae8ba1a4183143c.dir
+  size: 10387882
+  nfiles: 1725
+  hash: md5
+  path: dev1k
