@@ -57,7 +57,7 @@ flowchart LR
 ## Results
 
 On all 500 questions over a 2,723-document subset (723 gold documents plus 2,000 distractors,
-`data/subsets/dev2k`), the reasoning agent scored **0.745** against the baseline's **0.529**:
+`data/subsets/dev_2000`), the reasoning agent scored **0.745** against the baseline's **0.529**:
 +0.215, 95% bootstrap CI +0.176 to +0.256. It costs about 1.6 times as much time per question
 (23.4 s and 3.5 model turns on average, against 15.0 s and a single model call), and about
 10,800 tokens. 
@@ -87,10 +87,10 @@ several hours on a laptop: about 3.3 h for the agent and 2.1 h for the baseline.
 To reproduce:
 
 ```sh
-uv run techrag-subset --out-dir data/subsets/dev2k --distractors 2000
-uv run techrag-ingest data/subsets/dev2k --index-dir .index/dev2k
-uv run techrag-baseline --subset data/subsets/dev2k --index-dir .index/dev2k --output eval/baseline2k_q500.jsonl
-uv run techrag-agent --subset data/subsets/dev2k --index-dir .index/dev2k --output eval/agent2k_q500.jsonl
+uv run techrag-subset --out-dir data/subsets/dev_2000 --distractors 2000
+uv run techrag-ingest data/subsets/dev_2000 --index-dir .index/dev_2000
+uv run techrag-baseline --subset data/subsets/dev_2000 --index-dir .index/dev_2000 --output eval/baseline2k_q500.jsonl
+uv run techrag-agent --subset data/subsets/dev_2000 --index-dir .index/dev_2000 --output eval/agent2k_q500.jsonl
 uv run techrag-compare eval/baseline2k_q500.jsonl eval/agent2k_q500.jsonl
 ```
 
@@ -335,17 +335,18 @@ dvc push                 # after a rebuild: upload the new data, then commit dvc
 dvc add data/other       # track a directory no stage builds (and git add the .dvc file it writes)
 ```
 
-`dvc.yaml` has two stages per subset (`dev1k`, `dev2k`, `dev4k`), and `dvc.lock` records the
-hashes of what each one read and produced:
+`dvc.yaml` has two stages for each distractor count `n` listed under `subset.distractors` in
+`params.yaml`, which build `data/subsets/dev_n` and `.index/dev_n`. `dvc.lock` records the hashes
+of what each stage read and produced:
 
 | Stage | Runs | Rebuilds when these change |
 | --- | --- | --- |
-| `subset@dev4k`, ... | `techrag-subset` with seed 0 and 1,000, 2,000 or 4,000 distractors | The benchmark files, `bench.py`, the command in `dvc.yaml` |
-| `ingest@dev4k`, ... | `techrag-ingest` | The subset, `ingest.py`, `embed.py`, the chunk size, overlap or embedding model in `params.yaml` |
+| `subset@4000`, ... | `techrag-subset` | The benchmark files, `bench.py`, the seed in `params.yaml` |
+| `ingest@4000`, ... | `techrag-ingest` | The subset, `ingest.py`, `embed.py`, the chunk size, overlap or embedding model in `params.yaml` |
 
 `dvc repro` needs the benchmark under `data/external/EnterpriseRAG-Bench`, which DVC hashes but
 does not store. Without it, `dvc repro --allow-missing` skips stages whose only difference is
-missing files, and `dvc repro --single-item ingest@dev4k` checks one index against the pulled
+missing files, and `dvc repro --single-item ingest@4000` checks one index against the pulled
 subset.
 
 Every baseline and agent run records the DVC version of the index and of the subset it read
@@ -524,7 +525,7 @@ uv run ruff check    # lint
 data/subsets/      Benchmark subsets built by techrag-subset (versioned by DVC, not git)
 data/external/     Downloaded datasets, e.g. EnterpriseRAG-Bench (git-ignored)
 dvc.yaml           Pipeline: benchmark to subsets to indexes; dvc.lock records what it built
-params.yaml        Chunk size, overlap and embedding model for the ingest stages
+params.yaml        Seed and sizes for the subset stages; chunking and embedding model for ingest
 docs/              Notes on the EnterpriseRAG-Bench data and question types
 eval/              Generated results and reports
 src/techrag/

@@ -1,5 +1,9 @@
-# Settings that determine what the index contains. dvc.yaml's ingest stage reads these, so
-# changing one makes `dvc repro` rebuild the index and records the new values in dvc.lock.
+# Settings that determine what the subsets and indexes contain. dvc.yaml's stages read these, so
+# changing one makes `dvc repro` rebuild what it affects and records the new values in dvc.lock.
+subset:
+  seed: 0 # random seed for choosing the distractors
+  # Non-gold documents per subset. Each entry n builds data/subsets/dev_n and .index/dev_n.
+  distractors: [1000, 2000, 4000]
 ingest:
   size: 500 # max characters per chunk
   overlap: 50 # characters shared by adjacent chunks
