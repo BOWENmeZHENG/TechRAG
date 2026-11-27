@@ -1,0 +1,155 @@
+schema: '2.0'
+stages:
+  subset@1000:
+    cmd: techrag-subset --out-dir data/subsets/dev_1000 --distractors 1000 
+      --seed 0
+    deps:
+    - path: data/external/EnterpriseRAG-Bench/data
+      hash: md5
+      md5: 87c459e89742c4cc74ed4456a11e9bab.dir
+      size: 1410301868
+      nfiles: 2
+    - path: src/techrag/benchmarks/bench.py
+      hash: md5
+      md5: 2b29a9275d568b35a89983c18c97cb3f
+      size: 12377
+    params:
+      params.yaml:
+        subset.seed: 0
+    outs:
+    - path: data/subsets/dev_1000
+      hash: md5
+      md5: 9ffbfb3cc106da398ae8ba1a4183143c.dir
+      size: 10387882
+      nfiles: 1725
+  subset@2000:
+    cmd: techrag-subset --out-dir data/subsets/dev_2000 --distractors 2000 
+      --seed 0
+    deps:
+    - path: data/external/EnterpriseRAG-Bench/data
+      hash: md5
+      md5: 87c459e89742c4cc74ed4456a11e9bab.dir
+      size: 1410301868
+      nfiles: 2
+    - path: src/techrag/benchmarks/bench.py
+      hash: md5
+      md5: 2b29a9275d568b35a89983c18c97cb3f
+      size: 12377
+    params:
+      params.yaml:
+        subset.seed: 0
+    outs:
+    - path: data/subsets/dev_2000
+      hash: md5
+      md5: b9f0a2c351fc8fcf9ea2f572494801c9.dir
+      size: 15405897
+      nfiles: 2725
+  subset@4000:
+    cmd: techrag-subset --out-dir data/subsets/dev_4000 --distractors 4000 
+      --seed 0
+    deps:
+    - path: data/external/EnterpriseRAG-Bench/data
+      hash: md5
+      md5: 87c459e89742c4cc74ed4456a11e9bab.dir
+      size: 1410301868
+      nfiles: 2
+    - path: src/techrag/benchmarks/bench.py
+      hash: md5
+      md5: 2b29a9275d568b35a89983c18c97cb3f
+      size: 12377
+    params:
+      params.yaml:
+        subset.seed: 0
+    outs:
+    - path: data/subsets/dev_4000
+      hash: md5
+      md5: 535e0c70b2abcafa06332d38192be853.dir
+      size: 25064824
+      nfiles: 4725
+  ingest@1000:
+    cmd: techrag-ingest data/subsets/dev_1000 --index-dir .index/dev_1000 --size
+      500 --overlap 50 --model BAAI/bge-small-en-v1.5
+    deps:
+    - path: data/subsets/dev_1000
+      hash: md5
+      md5: 9ffbfb3cc106da398ae8ba1a4183143c.dir
+      size: 10387882
+      nfiles: 1725
+    - path: src/techrag/core/embed.py
+      hash: md5
+      md5: fc33a277119d8e72feab8a9b5f12cfe4
+      size: 966
+    - path: src/techrag/core/ingest.py
+      hash: md5
+      md5: 6100dbeca56bde8a6d180ca69451133c
+      size: 4837
+    params:
+      params.yaml:
+        ingest:
+          size: 500
+          overlap: 50
+          model: BAAI/bge-small-en-v1.5
+    outs:
+    - path: .index/dev_1000
+      hash: md5
+      md5: e36055e0b8f667036585d8bf69e1e7b0.dir
+      size: 54150211
+      nfiles: 2
+  ingest@2000:
+    cmd: techrag-ingest data/subsets/dev_2000 --index-dir .index/dev_2000 --size
+      500 --overlap 50 --model BAAI/bge-small-en-v1.5
+    deps:
+    - path: data/subsets/dev_2000
+      hash: md5
+      md5: b9f0a2c351fc8fcf9ea2f572494801c9.dir
+      size: 15405897
+      nfiles: 2725
+    - path: src/techrag/core/embed.py
+      hash: md5
+      md5: fc33a277119d8e72feab8a9b5f12cfe4
+      size: 966
+    - path: src/techrag/core/ingest.py
+      hash: md5
+      md5: 6100dbeca56bde8a6d180ca69451133c
+      size: 4837
+    params:
+      params.yaml:
+        ingest:
+          size: 500
+          overlap: 50
+          model: BAAI/bge-small-en-v1.5
+    outs:
+    - path: .index/dev_2000
+      hash: md5
+      md5: ee38712a5593db23e69575c4eedc8b2b.dir
+      size: 81433135
+      nfiles: 2
+  ingest@4000:
+    cmd: techrag-ingest data/subsets/dev_4000 --index-dir .index/dev_4000 --size
+      500 --overlap 50 --model BAAI/bge-small-en-v1.5
+    deps:
+    - path: data/subsets/dev_4000
+      hash: md5
+      md5: 535e0c70b2abcafa06332d38192be853.dir
+      size: 25064824
+      nfiles: 4725
+    - path: src/techrag/core/embed.py
+      hash: md5
+      md5: fc33a277119d8e72feab8a9b5f12cfe4
+      size: 966
+    - path: src/techrag/core/ingest.py
+      hash: md5
+      md5: 6100dbeca56bde8a6d180ca69451133c
+      size: 4837
+    params:
+      params.yaml:
+        ingest:
+          size: 500
+          overlap: 50
+          model: BAAI/bge-small-en-v1.5
+    outs:
+    - path: .index/dev_4000
+      hash: md5
+      md5: 82518f7a993d351061a7c19cf37c04bf.dir
+      size: 134021083
+      nfiles: 2

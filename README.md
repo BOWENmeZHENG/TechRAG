@@ -57,7 +57,7 @@ flowchart LR
 ## Results
 
 On all 500 questions over a 2,723-document subset (723 gold documents plus 2,000 distractors,
-`data/subsets/dev2k`), the reasoning agent scored **0.745** against the baseline's **0.529**:
+`data/subsets/dev_2000`), the reasoning agent scored **0.745** against the baseline's **0.529**:
 +0.215, 95% bootstrap CI +0.176 to +0.256. It costs about 1.6 times as much time per question
 (23.4 s and 3.5 model turns on average, against 15.0 s and a single model call), and about
 10,800 tokens. 
@@ -87,10 +87,10 @@ several hours on a laptop: about 3.3 h for the agent and 2.1 h for the baseline.
 To reproduce:
 
 ```sh
-uv run techrag-subset --out-dir data/subsets/dev2k --distractors 2000
-uv run techrag-ingest data/subsets/dev2k --index-dir .index/dev2k
-uv run techrag-baseline --subset data/subsets/dev2k --index-dir .index/dev2k --output eval/baseline2k_q500.jsonl
-uv run techrag-agent --subset data/subsets/dev2k --index-dir .index/dev2k --output eval/agent2k_q500.jsonl
+uv run techrag-subset --out-dir data/subsets/dev_2000 --distractors 2000
+uv run techrag-ingest data/subsets/dev_2000 --index-dir .index/dev_2000
+uv run techrag-baseline --subset data/subsets/dev_2000 --index-dir .index/dev_2000 --output eval/baseline2k_q500.jsonl
+uv run techrag-agent --subset data/subsets/dev_2000 --index-dir .index/dev_2000 --output eval/agent2k_q500.jsonl
 uv run techrag-compare eval/baseline2k_q500.jsonl eval/agent2k_q500.jsonl
 ```
 
@@ -217,10 +217,10 @@ run before any model loads.
 | Section | Records |
 | --- | --- |
 | `llm` | Model name, temperature, `max_tokens`, context window |
-| `retrieval` | `mode`, `k`, embedding model, `index_version` (a SHA-256 of `index.faiss` and `chunks.json`) |
+| `retrieval` | `mode`, `k`, embedding model, `index_version` (a SHA-256 of `index.faiss` and `chunks.json`), `index_dvc` (the [DVC version](#version-data-and-indexes-with-dvc) of the index directory) |
 | `agent` | `max_steps` and `think`. The baseline is one model turn, so it records `max_steps=1` |
 | `evaluation` | Judge model and temperature |
-| `data` | Subset name, a SHA-256 of its `questions.jsonl` and `manifest.json`, and how questions were sampled: `seed`, `sample_size` (`-n`), `per_type`, `question_ids` (`--ids`) |
+| `data` | Subset name, a SHA-256 of its `questions.jsonl` and `manifest.json`, `dataset_dvc` (the DVC version of the subset directory), and how questions were sampled: `seed`, `sample_size` (`-n`), `per_type`, `question_ids` (`--ids`) |
 | `metadata` | Run name, git commit, UTC timestamp, author (from `git config user.name`) |
 
 The manifest is rewritten on every start, so resuming with different options leaves it describing
@@ -320,6 +320,45 @@ the cost (seconds, model turns and tokens per question). `--names A B` relabels 
 ```sh
 uv run techrag-compare eval/baseline.jsonl eval/agent.jsonl
 ```
+
+### Version data and indexes with DVC
+
+The subsets in `data/subsets/` and the indexes in `.index/` are too big for git, so
+[DVC](https://dvc.org) tracks them: git holds small pointer files (`*.dvc` and `dvc.lock`) and the
+data lives in an S3 remote (`.dvc/config`). DVC is in its own dependency group, so evaluating needs
+only `uv sync`; for the commands below use `uv run --group data dvc ...`.
+
+```sh
+dvc pull                 # fetch the data and indexes the committed pointers name
+dvc repro                # rebuild the subsets and indexes that are out of date
+dvc push                 # after a rebuild: upload the new data, then commit dvc.lock
+dvc add data/other       # track a directory no stage builds (and git add the .dvc file it writes)
+```
+
+`dvc.yaml` has two stages for each distractor count `n` listed under `subset.distractors` in
+`params.yaml`, which build `data/subsets/dev_n` and `.index/dev_n`. `dvc.lock` records the hashes
+of what each stage read and produced:
+
+| Stage | Runs | Rebuilds when these change |
+| --- | --- | --- |
+| `subset@4000`, ... | `techrag-subset` | The benchmark files, `bench.py`, the seed in `params.yaml` |
+| `ingest@4000`, ... | `techrag-ingest` | The subset, `ingest.py`, `embed.py`, the chunk size, overlap or embedding model in `params.yaml` |
+
+`dvc repro` needs the benchmark under `data/external/EnterpriseRAG-Bench`, which DVC hashes but
+does not store. Without it, `dvc repro --allow-missing` skips stages whose only difference is
+missing files, and `dvc repro --single-item ingest@4000` checks one index against the pulled
+subset.
+
+Every baseline and agent run records the DVC version of the index and of the subset it read
+(`retrieval.index_dvc` and `data.dataset_dvc` in the manifest, so also MLflow parameters):
+
+| Field | Meaning |
+| --- | --- |
+| `md5` | The hash `dvc add` would record for the files on disk when the run started (`….dir`). After `dvc push`, `dvc pull` restores exactly those files |
+| `committed` | `true` if `md5` is the version in `dvc.lock` or the `.dvc` file, `false` if the files were changed since. A run with `false` read an index that no commit describes |
+
+These are in addition to `index_version`, which is a hash of the files actually loaded. A directory
+DVC does not track records no DVC version.
 
 ## Core RAG toolkit
 
@@ -482,14 +521,18 @@ uv run ruff check    # lint
 ## Layout
 
 ```
-data/subsets/      Benchmark dev subset built by techrag-subset (git-ignored)
+.index/            Indexes built by techrag-ingest (versioned by DVC, not git)
+data/subsets/      Benchmark subsets built by techrag-subset (versioned by DVC, not git)
 data/external/     Downloaded datasets, e.g. EnterpriseRAG-Bench (git-ignored)
+dvc.yaml           Pipeline: benchmark to subsets to indexes; dvc.lock records what it built
+params.yaml        Seed and sizes for the subset stages; chunking and embedding model for ingest
 docs/              Notes on the EnterpriseRAG-Bench data and question types
 eval/              Generated results and reports
 src/techrag/
   api.py             FastAPI app serving search and ask
   common/
     config.py        Shared defaults (models, paths, Ollama URL) and the run manifest schema
+    dvc_version.py   The DVC version of a data or index directory, checked against dvc.lock
     ollama.py        Minimal Ollama chat client
     tracking.py      MLflow runs: parameters, tags, metrics and artifacts, or a no-op when off
   core/

@@ -1,0 +1,32 @@
+stages:
+  subset:
+    # Build one subset per distractor count n in params.yaml, in data/subsets/dev_n: every gold
+    # document plus n seeded random distractors. DVC hashes the benchmark files but does not
+    # upload them.
+    foreach: ${subset.distractors}
+    do:
+      cmd: >-
+        techrag-subset --out-dir data/subsets/dev_${item}
+        --distractors ${item} --seed ${subset.seed}
+      deps:
+        - data/external/EnterpriseRAG-Bench/data
+        - src/techrag/benchmarks/bench.py
+      params:
+        - subset.seed
+      outs:
+        - data/subsets/dev_${item}
+  ingest:
+    # Build one FAISS index per subset. Run with `dvc repro` (or `dvc repro ingest@4000`).
+    foreach: ${subset.distractors}
+    do:
+      cmd: >-
+        techrag-ingest data/subsets/dev_${item} --index-dir .index/dev_${item}
+        --size ${ingest.size} --overlap ${ingest.overlap} --model ${ingest.model}
+      deps:
+        - data/subsets/dev_${item}
+        - src/techrag/core/ingest.py
+        - src/techrag/core/embed.py
+      params:
+        - ingest
+      outs:
+        - .index/dev_${item}

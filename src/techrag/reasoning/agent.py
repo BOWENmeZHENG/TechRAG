@@ -35,6 +35,7 @@ from techrag.common.config import (
     RetrievalConfig,
     RunConfig,
 )
+from techrag.common.dvc_version import dvc_version
 from techrag.common.log import setup_logging
 from techrag.common.tracking import tracked_eval
 from techrag.core.retrieve import Mode, Result, Retriever
@@ -620,6 +621,7 @@ def main() -> None:
                 k=SEARCH_DOCS,
                 embedding_model=args.embedding_model,
                 index_version=index_version(args.index_dir),
+                index_dvc=dvc_version(args.index_dir),
             ),
             agent=AgentConfig(max_steps=args.max_steps, think=args.think),
             evaluation=EvaluationConfig(judge_model=args.judge_model),

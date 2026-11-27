@@ -1,0 +1,6 @@
+outs:
+- md5: a9b1627575fcb77a449ebb52950db999.dir
+  size: 1361015
+  nfiles: 2
+  hash: md5
+  path: toy
